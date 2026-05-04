@@ -1,0 +1,356 @@
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { getPaginationParams, paginate } from '../common/utils/pagination.util';
+import { v4 as uuidv4 } from 'uuid';
+
+@Injectable()
+export class OrdersService {
+  constructor(
+    private prisma: PrismaService,
+    private notifications: NotificationsService,
+  ) {}
+
+  private generateOrderNumber(): string {
+    const ts = Date.now().toString().slice(-8);
+    const rand = uuidv4().split('-')[0].toUpperCase();
+    return `LS-${ts}-${rand}`;
+  }
+
+  // ─── CRÉER UNE COMMANDE ───────────────────────────────────────────────────────
+
+  async createOrder(buyerId: string, data: {
+    productId: string;
+    quantity?: number;
+    addressId?: string;
+    notes?: string;
+  }) {
+    const product = await this.prisma.product.findUnique({
+      where: { id: data.productId, status: 'ACTIVE' },
+      include: {
+        seller: {
+          include: {
+            subscription: { select: { plan: true } },
+            profile: true,
+          },
+        },
+      },
+    });
+
+    if (!product) throw new NotFoundException('Produit introuvable ou indisponible');
+    if (product.sellerId === buyerId) throw new BadRequestException('Vous ne pouvez pas acheter votre propre produit');
+    if (product.quantity < (data.quantity || 1)) throw new BadRequestException('Stock insuffisant');
+
+    const quantity = data.quantity || 1;
+    const subtotal = product.price * quantity;
+    const delivery = product.hasDelivery ? (product.deliveryPrice || 0) : 0;
+    const totalAmount = subtotal + delivery;
+
+    // Commission dégressive selon le forfait vendeur
+    const commissionRates: Record<string, number> = {
+      FREE: 0.05, BASIC: 0.045, ESSENTIAL: 0.04,
+      PREMIUM: 0.035, PRO: 0.03, BUSINESS: 0.02,
+    };
+    const sellerPlan = product.seller.subscription?.plan || 'FREE';
+    const commissionRate = commissionRates[sellerPlan] ?? 0.05;
+    const commissionAmount = totalAmount * commissionRate;
+    const sellerAmount = totalAmount - commissionAmount;
+
+    const order = await this.prisma.$transaction(async (tx) => {
+      const newOrder = await tx.order.create({
+        data: {
+          orderNumber: this.generateOrderNumber(),
+          buyerId,
+          sellerId: product.sellerId,
+          addressId: data.addressId || null,
+          totalAmount,
+          commissionAmount,
+          sellerAmount,
+          deliveryAmount: delivery,
+          notes: data.notes,
+          status: 'PENDING',
+          items: {
+            create: [{
+              productId: product.id,
+              title: product.title,
+              price: product.price,
+              quantity,
+              imageUrl: null,
+            }],
+          },
+        },
+        include: {
+          items: true,
+          buyer: { select: { email: true, firstName: true } },
+          seller: { select: { email: true, firstName: true } },
+        },
+      });
+
+      // Réduire le stock
+      await tx.product.update({
+        where: { id: product.id },
+        data: { quantity: { decrement: quantity } },
+      });
+
+      return newOrder;
+    });
+
+    return { message: 'Commande créée', data: order };
+  }
+
+  // ─── METTRE À JOUR LE STATUT ─────────────────────────────────────────────────
+
+  async updateStatus(orderId: string, userId: string, role: string, status: string, data?: { trackingNumber?: string; trackingUrl?: string; reason?: string }) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        buyer: { select: { email: true, firstName: true } },
+        seller: { select: { email: true, firstName: true } },
+        items: { select: { productId: true, quantity: true } },
+      },
+    });
+
+    if (!order) throw new NotFoundException('Commande introuvable');
+
+    // Vérification des permissions
+    const allowedTransitions: Record<string, Record<string, string[]>> = {
+      SELLER: {
+        PAYMENT_CONFIRMED: ['PROCESSING'],
+        PROCESSING: ['SHIPPED'],
+      },
+      BUYER: {
+        SHIPPED: ['DELIVERED'],
+        DELIVERED: ['COMPLETED'],
+        PENDING: ['CANCELLED'],
+      },
+      ADMIN: {
+        PENDING: ['CANCELLED'],
+        PAYMENT_CONFIRMED: ['CANCELLED', 'PROCESSING'],
+        PROCESSING: ['SHIPPED', 'CANCELLED'],
+        SHIPPED: ['DELIVERED'],
+        DELIVERED: ['COMPLETED'],
+        COMPLETED: ['REFUNDED'],
+        DISPUTED: ['COMPLETED', 'REFUNDED'],
+      },
+    };
+
+    const userRole = role === 'ADMIN' || role === 'MODERATOR' ? 'ADMIN'
+      : order.sellerId === userId ? 'SELLER'
+      : order.buyerId === userId ? 'BUYER' : null;
+
+    if (!userRole) throw new ForbiddenException('Non autorisé');
+
+    const allowed = allowedTransitions[userRole]?.[order.status];
+    if (!allowed || !allowed.includes(status)) {
+      throw new BadRequestException(`Transition ${order.status} → ${status} non autorisée`);
+    }
+
+    const escrowDelayMs = 48 * 60 * 60 * 1000;
+
+    const updateData: any = {
+      status,
+      ...(data?.trackingNumber && { trackingNumber: data.trackingNumber }),
+      ...(data?.trackingUrl && { trackingUrl: data.trackingUrl }),
+      ...(status === 'DELIVERED' && {
+        deliveredAt: new Date(),
+        escrowReleaseAt: new Date(Date.now() + escrowDelayMs),
+      }),
+      ...(status === 'COMPLETED' && { completedAt: new Date() }),
+      ...(status === 'CANCELLED' && { cancelledAt: new Date(), cancellationReason: data?.reason }),
+    };
+
+    let updated: any;
+
+    if (status === 'CANCELLED' && order.items?.length > 0) {
+      // Restaurer le stock de chaque article dans une transaction atomique
+      const results = await this.prisma.$transaction([
+        this.prisma.order.update({ where: { id: orderId }, data: updateData }),
+        ...order.items.map((item) =>
+          this.prisma.product.update({
+            where: { id: item.productId },
+            data: { quantity: { increment: item.quantity } },
+          }),
+        ),
+      ]);
+      updated = results[0];
+    } else {
+      updated = await this.prisma.order.update({
+        where: { id: orderId },
+        data: updateData,
+      });
+    }
+
+    // Notifications
+    if (status === 'SHIPPED') {
+      await this.notifications.sendOrderShipped(
+        order.buyer.email, order.buyer.firstName,
+        order.orderNumber, data?.trackingUrl,
+      );
+    }
+    if (status === 'COMPLETED') {
+      // Libérer l'escrow et créditer le vendeur
+      await this.releaseEscrow(orderId);
+    }
+
+    return { message: 'Statut mis à jour', data: updated };
+  }
+
+  private async releaseEscrow(orderId: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: { payment: true, seller: { select: { id: true } } },
+    });
+
+    if (!order?.payment) return;
+
+    await this.prisma.$transaction([
+      this.prisma.payment.update({
+        where: { orderId },
+        data: { escrowReleasedAt: new Date() },
+      }),
+      // Points de fidélité pour l'acheteur
+      this.prisma.loyaltyAccount.upsert({
+        where: { userId: order.buyerId },
+        update: { points: { increment: Math.floor(order.totalAmount / 1000) } },
+        create: {
+          userId: order.buyerId,
+          points: Math.floor(order.totalAmount / 1000),
+          totalEarned: Math.floor(order.totalAmount / 1000),
+        },
+      }),
+    ]);
+  }
+
+  // ─── OUVRIR UN LITIGE ────────────────────────────────────────────────────────
+
+  async openDispute(orderId: string, buyerId: string, data: { reason: string; description: string; evidenceUrls?: string[] }) {
+    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) throw new NotFoundException('Commande introuvable');
+    if (order.buyerId !== buyerId) throw new ForbiddenException('Non autorisé');
+    if (!['DELIVERED', 'SHIPPED'].includes(order.status)) {
+      throw new BadRequestException('Vous ne pouvez ouvrir un litige que sur une commande expédiée ou livrée');
+    }
+
+    const existing = await this.prisma.dispute.findUnique({ where: { orderId } });
+    if (existing) throw new BadRequestException('Un litige est déjà ouvert pour cette commande');
+
+    const [dispute] = await this.prisma.$transaction([
+      this.prisma.dispute.create({
+        data: {
+          orderId,
+          initiatorId: buyerId,
+          reason: data.reason,
+          description: data.description,
+          evidenceUrls: data.evidenceUrls || [],
+        },
+      }),
+      this.prisma.order.update({
+        where: { id: orderId },
+        data: { status: 'DISPUTED' },
+      }),
+    ]);
+
+    return { message: 'Litige ouvert', data: dispute };
+  }
+
+  // ─── RÉCUPÉRER LES COMMANDES ──────────────────────────────────────────────────
+
+  async getBuyerOrders(buyerId: string, page = 1, limit = 20) {
+    const { skip, take } = getPaginationParams(page, limit);
+    const [orders, total] = await Promise.all([
+      this.prisma.order.findMany({
+        where: { buyerId },
+        skip, take,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          items: {
+            include: {
+              product: { include: { images: { where: { isPrimary: true }, take: 1 } } },
+            },
+          },
+          seller: { include: { sellerProfile: { select: { shopName: true, shopSlug: true } } } },
+          payment: { select: { status: true, method: true } },
+          dispute: { select: { status: true } },
+          review: { select: { id: true, rating: true } },
+        },
+      }),
+      this.prisma.order.count({ where: { buyerId } }),
+    ]);
+    return { message: 'Commandes récupérées', data: orders, meta: paginate(total, page, limit) };
+  }
+
+  async getSellerOrders(sellerId: string, page = 1, limit = 20, status?: string) {
+    const { skip, take } = getPaginationParams(page, limit);
+    const where: any = { sellerId };
+    if (status) where.status = status;
+
+    const [orders, total] = await Promise.all([
+      this.prisma.order.findMany({
+        where,
+        skip, take,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          items: true,
+          buyer: { select: { firstName: true, lastName: true, profile: { select: { avatarUrl: true } } } },
+          payment: { select: { status: true, method: true } },
+        },
+      }),
+      this.prisma.order.count({ where }),
+    ]);
+    return { message: 'Commandes vendeur', data: orders, meta: paginate(total, page, limit) };
+  }
+
+  async getOrderById(orderId: string, userId: string, role: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        items: { include: { product: { include: { images: { take: 1 } } } } },
+        buyer: { select: { id: true, firstName: true, lastName: true, email: true } },
+        seller: {
+          select: {
+            id: true, firstName: true, lastName: true, email: true,
+            sellerProfile: { select: { shopName: true, shopPhone: true, shopWhatsapp: true } },
+          },
+        },
+        address: true,
+        payment: true,
+        review: true,
+        dispute: true,
+      },
+    });
+
+    if (!order) throw new NotFoundException('Commande introuvable');
+    if (order.buyerId !== userId && order.sellerId !== userId && role !== 'ADMIN') {
+      throw new ForbiddenException('Non autorisé');
+    }
+
+    return { message: 'Commande récupérée', data: order };
+  }
+
+  // ─── ADMIN ────────────────────────────────────────────────────────────────────
+
+  async adminGetOrders(page = 1, limit = 20, status?: string) {
+    const { skip, take } = getPaginationParams(page, limit);
+    const where: any = {};
+    if (status) where.status = status;
+
+    const [orders, total] = await Promise.all([
+      this.prisma.order.findMany({
+        where, skip, take,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          buyer: { select: { firstName: true, lastName: true, email: true } },
+          seller: { select: { firstName: true, lastName: true, email: true } },
+          payment: { select: { status: true, amount: true } },
+        },
+      }),
+      this.prisma.order.count({ where }),
+    ]);
+    return { data: orders, meta: paginate(total, page, limit) };
+  }
+}

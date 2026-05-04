@@ -1,0 +1,23 @@
+# Normalisation des fins de ligne
+* text=auto eol=lf
+
+# Scripts shell : toujours LF (Linux/Mac)
+*.sh text eol=lf
+deploy.sh text eol=lf
+setup.sh text eol=lf
+
+# Fichiers binaires
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.avif binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.pdf binary
+*.zip binary
+*.tar.gz binary

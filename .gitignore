@@ -1,0 +1,69 @@
+# ─── ENVIRONNEMENTS ───────────────────────────────────────────────────────────
+.env
+.env.local
+.env.production
+.env.*.local
+!.env.example
+
+# ─── DÉPENDANCES ──────────────────────────────────────────────────────────────
+node_modules/
+.pnp
+.pnp.js
+
+# ─── BUILD ────────────────────────────────────────────────────────────────────
+dist/
+.next/
+out/
+build/
+
+# ─── PRISMA ───────────────────────────────────────────────────────────────────
+ls-backend/node_modules/.prisma/
+
+# ─── SSL (ne jamais committer les clés) ───────────────────────────────────────
+apache/ssl/
+nginx/ssl/
+
+# ─── LOGS ─────────────────────────────────────────────────────────────────────
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ─── OS ───────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# ─── UPLOADS LOCAUX ───────────────────────────────────────────────────────────
+uploads/
+public/uploads/
+
+# ─── ARCHIVES ─────────────────────────────────────────────────────────────────
+*.zip
+*.tar.gz
+
+# ─── FICHIERS TEMPORAIRES OFFICE ──────────────────────────────────────────────
+~$*.docx
+~$*.xlsx
+~$*.pptx
+
+# ─── DOCUMENTS LOCAUX (non liés au code) ──────────────────────────────────────
+*.docx
+*.pdf
+*.doc
+
+# ─── CLAUDE CODE (sessions locales) ───────────────────────────────────────────
+.claude/
+claude
+claude01
+claude02
+
+# ─── SCRIPTS UTILITAIRES LOCAUX ───────────────────────────────────────────────
+generate_projets_pro.mjs
+
+# ─── NGINX (remplacé par Apache) ──────────────────────────────────────────────
+nginx/

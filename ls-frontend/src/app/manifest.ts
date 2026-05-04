@@ -1,0 +1,36 @@
+import { MetadataRoute } from 'next'
+
+export default function manifest(): MetadataRoute.Manifest {
+  return {
+    name: 'LS Marketplace',
+    short_name: 'LS Market',
+    description: 'La marketplace N°1 pour équipements informatiques en Afrique. Paiement Mobile Money accepté.',
+    start_url: '/',
+    display: 'standalone',
+    background_color: '#0F0F1A',
+    theme_color: '#1A3C6E',
+    orientation: 'portrait-primary',
+    icons: [
+      { src: '/icons/icon-72x72.png', sizes: '72x72', type: 'image/png' },
+      { src: '/icons/icon-96x96.png', sizes: '96x96', type: 'image/png' },
+      { src: '/icons/icon-128x128.png', sizes: '128x128', type: 'image/png' },
+      { src: '/icons/icon-144x144.png', sizes: '144x144', type: 'image/png' },
+      { src: '/icons/icon-152x152.png', sizes: '152x152', type: 'image/png' },
+      { src: '/icons/icon-192x192.png', sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
+      { src: '/icons/icon-384x384.png', sizes: '384x384', type: 'image/png' },
+      { src: '/icons/icon-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
+    ],
+    categories: ['shopping', 'technology'],
+    lang: 'fr',
+    screenshots: [
+      {
+        src: '/screenshots/home.png',
+        sizes: '390x844',
+        type: 'image/png',
+        // @ts-expect-error — form_factor est supporté mais pas encore dans le type Next.js
+        form_factor: 'narrow',
+        label: 'Page d\'accueil LS Marketplace',
+      },
+    ],
+  }
+}
