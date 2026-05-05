@@ -38,6 +38,7 @@ export default () => ({
     accountSid: process.env.TWILIO_ACCOUNT_SID,
     authToken: process.env.TWILIO_AUTH_TOKEN,
     phoneNumber: process.env.TWILIO_PHONE_NUMBER,
+    whatsappFrom: process.env.TWILIO_WHATSAPP_FROM,
   },
 
   stripe: {
@@ -74,5 +75,19 @@ export default () => ({
   escrow: {
     releaseDelayHours: parseInt(process.env.ESCROW_RELEASE_DELAY_HOURS, 10) || 48,
     commissionRate: parseFloat(process.env.COMMISSION_RATE) || 0.03,
+  },
+
+  vapid: {
+    publicKey: process.env.VAPID_PUBLIC_KEY,
+    privateKey: process.env.VAPID_PRIVATE_KEY,
+  },
+
+  meilisearch: {
+    host: process.env.MEILISEARCH_HOST || 'http://localhost:7700',
+    apiKey: process.env.MEILISEARCH_API_KEY || '',
+  },
+
+  sentry: {
+    dsn: process.env.SENTRY_DSN,
   },
 });

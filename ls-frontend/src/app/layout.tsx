@@ -5,6 +5,7 @@ import Footer from '@/components/layout/Footer'
 import Providers from './providers'
 import ServiceWorkerRegistration from '@/components/common/ServiceWorkerRegistration'
 import CookieConsent from '@/components/common/CookieConsent'
+import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 import '@/styles/globals.css'
 
 export const metadata: Metadata = {
@@ -33,7 +34,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <div className="flex flex-col min-h-screen">
             <Header />
             <main className="flex-1 pt-[120px] md:pt-[104px]">
-              {children}
+              <ErrorBoundary>
+                {children}
+              </ErrorBoundary>
             </main>
             <Footer />
           </div>

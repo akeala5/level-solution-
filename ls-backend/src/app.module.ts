@@ -22,6 +22,7 @@ import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 import { AdminModule } from './admin/admin.module';
 import { AuctionsModule } from './auctions/auctions.module';
 import { SearchAlertsModule } from './search-alerts/search-alerts.module';
+import { SearchModule } from './search/search.module';
 
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -82,6 +83,7 @@ import { SearchAlertsJob } from './common/jobs/search-alerts.job';
     AdminModule,
     AuctionsModule,
     SearchAlertsModule,
+    SearchModule,
   ],
   controllers: [HealthController],
   providers: [

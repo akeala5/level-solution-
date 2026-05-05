@@ -85,4 +85,13 @@ export class ProductsController {
   ) {
     return this.productsService.adminApprove(id, body.approved, body.reason);
   }
+
+  @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN' as any)
+  @Post('admin/reindex')
+  @ApiOperation({ summary: '[Admin] Réindexer toutes les annonces actives dans Meilisearch' })
+  reindex() {
+    return this.productsService.reindexAll();
+  }
 }

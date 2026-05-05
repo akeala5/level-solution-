@@ -3,16 +3,21 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import * as nodemailer from 'nodemailer';
 import { NotificationType } from '@prisma/client';
+import Twilio from 'twilio';
 
 @Injectable()
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
   private transporter: nodemailer.Transporter;
+  private twilioClient: Twilio.Twilio | null = null;
+  private twilioFrom: string;
+  private whatsappFrom: string;
 
   constructor(
     private configService: ConfigService,
     private prisma: PrismaService,
   ) {
+    // ── Email (Nodemailer SMTP) ──────────────────────────────────────────────
     this.transporter = nodemailer.createTransport({
       host: configService.get('email.host'),
       port: configService.get('email.port'),
@@ -21,6 +26,156 @@ export class NotificationsService {
         pass: configService.get('email.pass'),
       },
     });
+
+    // ── SMS + WhatsApp (Twilio) — facultatif, pas de crash si clés absentes ──
+    const accountSid    = configService.get<string>('twilio.accountSid');
+    const authToken     = configService.get<string>('twilio.authToken');
+    this.twilioFrom     = configService.get<string>('twilio.phoneNumber') || '';
+    this.whatsappFrom   = configService.get<string>('twilio.whatsappFrom') || '';
+
+    if (accountSid && authToken) {
+      try {
+        this.twilioClient = Twilio(accountSid, authToken);
+        this.logger.log(`Twilio initialisé — SMS ${this.twilioFrom ? '✓' : '—'} · WhatsApp ${this.whatsappFrom ? '✓' : '—'}`);
+      } catch (e) {
+        this.logger.warn('Twilio non disponible — SMS/WhatsApp désactivés');
+      }
+    } else {
+      this.logger.warn('TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN manquants — SMS/WhatsApp désactivés');
+    }
+  }
+
+  // ─── SMS ─────────────────────────────────────────────────────────────────
+
+  async sendSms(to: string, body: string): Promise<boolean> {
+    if (!this.twilioClient) {
+      this.logger.warn(`SMS non envoyé (Twilio désactivé) — à ${to}: ${body}`);
+      return false;
+    }
+    // Normalise le numéro (ajoute + si absent)
+    const normalized = to.startsWith('+') ? to : `+${to}`;
+    try {
+      await this.twilioClient.messages.create({
+        body,
+        from: this.twilioFrom,
+        to: normalized,
+      });
+      this.logger.log(`SMS envoyé à ${normalized}`);
+      return true;
+    } catch (error) {
+      this.logger.error(`Erreur SMS à ${normalized}: ${error.message}`);
+      return false;
+    }
+  }
+
+  async sendSmsOtp(phone: string, firstName: string, code: string) {
+    await Promise.allSettled([
+      this.sendSms(
+        phone,
+        `LS Marketplace - Bonjour ${firstName}, votre code de vérification est : ${code}. Valable 10 min.`,
+      ),
+      this.sendWhatsAppOtp(phone, firstName, code),
+    ]);
+  }
+
+  async sendSmsOrderConfirmed(phone: string, firstName: string, orderNumber: string, amount: string) {
+    await this.sendSms(
+      phone,
+      `LS Marketplace - Bonjour ${firstName} ! Commande #${orderNumber} confirmée. Montant : ${amount} FCFA. Paiement sécurisé par escrow LS.`,
+    );
+  }
+
+  async sendSmsOrderShipped(phone: string, firstName: string, orderNumber: string) {
+    await this.sendSms(
+      phone,
+      `LS Marketplace - Votre commande #${orderNumber} est en route ! Confirmez la réception dans votre espace acheteur.`,
+    );
+  }
+
+  async sendSmsOrderDelivered(phone: string, firstName: string, orderNumber: string) {
+    await this.sendSms(
+      phone,
+      `LS Marketplace - Commande #${orderNumber} livrée. Vous avez 48h pour confirmer ou ouvrir un litige. ls-marketplace.com`,
+    );
+  }
+
+  async sendSmsNewMessage(phone: string, firstName: string, senderName: string) {
+    await this.sendSms(
+      phone,
+      `LS Marketplace - ${firstName}, nouveau message de ${senderName}. Connectez-vous pour répondre.`,
+    );
+  }
+
+  async sendSmsPaymentReceived(phone: string, firstName: string, amount: string, orderNumber: string) {
+    await this.sendSms(
+      phone,
+      `LS Marketplace - Paiement reçu de ${amount} FCFA pour la commande #${orderNumber}. Préparez votre colis.`,
+    );
+  }
+
+  // ─── WHATSAPP ─────────────────────────────────────────────────────────────
+
+  async sendWhatsApp(to: string, body: string): Promise<boolean> {
+    if (!this.twilioClient || !this.whatsappFrom) {
+      this.logger.warn(`WhatsApp non envoyé (Twilio/whatsappFrom désactivé) — à ${to}`);
+      return false;
+    }
+    const normalized = to.startsWith('+') ? to : `+${to}`;
+    try {
+      await this.twilioClient.messages.create({
+        body,
+        from: this.whatsappFrom.startsWith('whatsapp:') ? this.whatsappFrom : `whatsapp:${this.whatsappFrom}`,
+        to: `whatsapp:${normalized}`,
+      });
+      this.logger.log(`WhatsApp envoyé à ${normalized}`);
+      return true;
+    } catch (error) {
+      this.logger.error(`Erreur WhatsApp à ${normalized}: ${error.message}`);
+      return false;
+    }
+  }
+
+  async sendWhatsAppOrderConfirmed(phone: string, firstName: string, orderNumber: string, amount: string) {
+    await this.sendWhatsApp(
+      phone,
+      `🛍️ *LS Marketplace*\n\nBonjour *${firstName}* !\n\nVotre commande *#${orderNumber}* est confirmée.\nMontant : *${amount} FCFA*\n\n🔒 Votre paiement est sécurisé par l'escrow LS. Les fonds seront libérés au vendeur après confirmation de réception.\n\n👉 Suivez votre commande sur ls-marketplace.com`,
+    );
+  }
+
+  async sendWhatsAppOrderShipped(phone: string, firstName: string, orderNumber: string, trackingUrl?: string) {
+    const trackingLine = trackingUrl ? `\n\n📍 Suivi : ${trackingUrl}` : '';
+    await this.sendWhatsApp(
+      phone,
+      `🚚 *LS Marketplace*\n\nBonjour *${firstName}* !\n\nVotre commande *#${orderNumber}* est en route !${trackingLine}\n\nConfirmez la réception dans votre espace acheteur une fois livré.`,
+    );
+  }
+
+  async sendWhatsAppOrderDelivered(phone: string, firstName: string, orderNumber: string) {
+    await this.sendWhatsApp(
+      phone,
+      `📦 *LS Marketplace*\n\nBonjour *${firstName}* !\n\nVotre commande *#${orderNumber}* a été marquée comme livrée.\n\n⏱️ Vous avez *48h* pour confirmer la réception ou ouvrir un litige.\n\n👉 ls-marketplace.com/orders`,
+    );
+  }
+
+  async sendWhatsAppNewMessage(phone: string, firstName: string, senderName: string) {
+    await this.sendWhatsApp(
+      phone,
+      `💬 *LS Marketplace*\n\nBonjour *${firstName}* !\n\nVous avez un nouveau message de *${senderName}*.\n\n👉 Répondez sur ls-marketplace.com/chat`,
+    );
+  }
+
+  async sendWhatsAppPaymentReceived(phone: string, firstName: string, amount: string, orderNumber: string) {
+    await this.sendWhatsApp(
+      phone,
+      `💰 *LS Marketplace*\n\nBonjour *${firstName}* !\n\nPaiement reçu : *${amount} FCFA* pour la commande *#${orderNumber}*.\n\nPréparez et expédiez le colis dès que possible. 🚀`,
+    );
+  }
+
+  async sendWhatsAppOtp(phone: string, firstName: string, code: string) {
+    await this.sendWhatsApp(
+      phone,
+      `🔐 *LS Marketplace*\n\nBonjour *${firstName}* !\n\nVotre code de vérification : *${code}*\n\n⚠️ Valable 10 minutes. Ne partagez jamais ce code.`,
+    );
   }
 
   // ─── EMAIL ──────────────────────────────────────────────────────────────────
@@ -42,7 +197,6 @@ export class NotificationsService {
   async sendEmailVerification(email: string, firstName: string, token: string) {
     const frontendUrl = this.configService.get('frontendUrl');
     const verifyUrl = `${frontendUrl}/verify-email?token=${token}`;
-
     await this.sendEmail(
       email,
       '✅ Vérifiez votre email — LS Marketplace',
@@ -62,7 +216,6 @@ export class NotificationsService {
   async sendPasswordReset(email: string, firstName: string, token: string) {
     const frontendUrl = this.configService.get('frontendUrl');
     const resetUrl = `${frontendUrl}/reset-password?token=${token}`;
-
     await this.sendEmail(
       email,
       '🔐 Réinitialisation de votre mot de passe — LS Marketplace',
@@ -82,6 +235,7 @@ export class NotificationsService {
   async sendOrderConfirmation(
     email: string, firstName: string,
     orderNumber: string, totalAmount: number, currency: string,
+    phone?: string,
   ) {
     await this.sendEmail(
       email,
@@ -96,9 +250,19 @@ export class NotificationsService {
         </div>
       `),
     );
+    if (phone) {
+      // Envoyer en parallèle SMS + WhatsApp (erreur de l'un n'annule pas l'autre)
+      await Promise.allSettled([
+        this.sendSmsOrderConfirmed(phone, firstName, orderNumber, totalAmount.toLocaleString()),
+        this.sendWhatsAppOrderConfirmed(phone, firstName, orderNumber, totalAmount.toLocaleString()),
+      ]);
+    }
   }
 
-  async sendOrderShipped(email: string, firstName: string, orderNumber: string, trackingUrl?: string) {
+  async sendOrderShipped(
+    email: string, firstName: string,
+    orderNumber: string, trackingUrl?: string, phone?: string,
+  ) {
     await this.sendEmail(
       email,
       `🚚 Votre commande #${orderNumber} est expédiée !`,
@@ -108,9 +272,18 @@ export class NotificationsService {
         ${trackingUrl ? `<div style="text-align:center;margin:20px 0;"><a href="${trackingUrl}" style="background:#1A3C6E;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;">Suivre ma commande</a></div>` : ''}
       `),
     );
+    if (phone) {
+      await Promise.allSettled([
+        this.sendSmsOrderShipped(phone, firstName, orderNumber),
+        this.sendWhatsAppOrderShipped(phone, firstName, orderNumber, trackingUrl),
+      ]);
+    }
   }
 
-  async sendNewMessage(email: string, firstName: string, senderName: string) {
+  async sendNewMessage(
+    email: string, firstName: string,
+    senderName: string, phone?: string,
+  ) {
     await this.sendEmail(
       email,
       `💬 Nouveau message de ${senderName} — LS Marketplace`,
@@ -118,10 +291,72 @@ export class NotificationsService {
         <h2>Nouveau message !</h2>
         <p>Bonjour ${firstName}, <strong>${senderName}</strong> vous a envoyé un message sur LS Marketplace.</p>
         <div style="text-align:center;margin:20px 0;">
-          <a href="${this.configService.get('frontendUrl')}/messages" style="background:#1A3C6E;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;">Voir le message</a>
+          <a href="${this.configService.get('frontendUrl')}/chat" style="background:#1A3C6E;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;">Voir le message</a>
         </div>
       `),
     );
+    if (phone) {
+      await Promise.allSettled([
+        this.sendSmsNewMessage(phone, firstName, senderName),
+        this.sendWhatsAppNewMessage(phone, firstName, senderName),
+      ]);
+    }
+  }
+
+  // ─── PUSH NOTIFICATIONS (Web Push) ─────────────────────────────────────────
+
+  async savePushSubscription(userId: string, subscription: {
+    endpoint: string;
+    keys: { p256dh: string; auth: string };
+  }) {
+    // Sauvegarde en JSON dans le profil utilisateur
+    await this.prisma.profile.upsert({
+      where: { userId },
+      update: { pushSubscription: JSON.stringify(subscription) },
+      create: { userId, pushSubscription: JSON.stringify(subscription), country: 'TG', language: 'fr', currency: 'XOF' },
+    });
+    return { message: 'Abonnement push enregistré' };
+  }
+
+  async sendPushNotification(userId: string, payload: { title: string; body: string; url?: string }) {
+    const profile = await this.prisma.profile.findUnique({ where: { userId } });
+    if (!profile?.pushSubscription) return;
+
+    const webpush = await import('web-push');
+    const vapidPublicKey  = this.configService.get<string>('vapid.publicKey');
+    const vapidPrivateKey = this.configService.get<string>('vapid.privateKey');
+
+    if (!vapidPublicKey || !vapidPrivateKey) {
+      this.logger.warn('Clés VAPID manquantes — push notification désactivée');
+      return;
+    }
+
+    webpush.setVapidDetails(
+      `mailto:${this.configService.get('email.from')}`,
+      vapidPublicKey,
+      vapidPrivateKey,
+    );
+
+    try {
+      const subscription = JSON.parse(profile.pushSubscription as string);
+      await webpush.sendNotification(subscription, JSON.stringify({
+        title: payload.title,
+        body: payload.body,
+        url: payload.url || '/',
+        icon: '/icons/icon-192x192.png',
+        badge: '/icons/badge-72x72.png',
+      }));
+      this.logger.log(`Push envoyée à userId ${userId}`);
+    } catch (error) {
+      this.logger.error(`Erreur push userId ${userId}: ${error.message}`);
+      // Nettoyer l'abonnement invalide
+      if (error.statusCode === 410) {
+        await this.prisma.profile.update({
+          where: { userId },
+          data: { pushSubscription: null },
+        });
+      }
+    }
   }
 
   // ─── NOTIFICATIONS IN-APP ─────────────────────────────────────────────────
@@ -150,7 +385,6 @@ export class NotificationsService {
       this.prisma.notification.count({ where: { userId } }),
       this.prisma.notification.count({ where: { userId, isRead: false } }),
     ]);
-
     return { notifications, total, unreadCount, page, limit };
   }
 

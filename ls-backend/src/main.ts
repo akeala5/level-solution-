@@ -1,3 +1,5 @@
+import * as Sentry from '@sentry/node';
+import { nodeProfilingIntegration } from '@sentry/profiling-node';
 import { NestFactory, Reflector } from '@nestjs/core';
 import { ValidationPipe, VersioningType } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
@@ -5,6 +7,24 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import * as helmet from 'helmet';
 import * as compression from 'compression';
 import { AppModule } from './app.module';
+import { SentryInterceptor } from './common/interceptors/sentry.interceptor';
+
+// Sentry doit être initialisé avant NestFactory pour intercepter toutes les erreurs
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV || 'development',
+    integrations: [nodeProfilingIntegration()],
+    tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.2 : 1.0,
+    profilesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
+    ignoreErrors: [
+      'UnauthorizedException',
+      'NotFoundException',
+      'BadRequestException',
+      'ForbiddenException',
+    ],
+  });
+}
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
@@ -27,6 +47,11 @@ async function bootstrap() {
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept-Language'],
   });
+
+  // ─── SENTRY ───────────────────────────────────────────────────────────────────
+  if (process.env.SENTRY_DSN) {
+    app.useGlobalInterceptors(new SentryInterceptor());
+  }
 
   // ─── VALIDATION GLOBALE ───────────────────────────────────────────────────────
   app.useGlobalPipes(

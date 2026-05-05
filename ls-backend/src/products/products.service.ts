@@ -5,6 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { SearchService } from '../search/search.service';
 import { generateSlug } from '../common/utils/slug.util';
 import { getPaginationParams, paginate } from '../common/utils/pagination.util';
 import { CreateProductDto, UpdateProductDto, ProductQueryDto } from './dto/create-product.dto';
@@ -29,23 +30,81 @@ const PRODUCT_INCLUDE = {
 
 @Injectable()
 export class ProductsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private search: SearchService,
+  ) {}
 
   // ─── LISTE PUBLIQUE ──────────────────────────────────────────────────────────
 
   async findAll(query: ProductQueryDto, userId?: string) {
     const { skip, take, page, limit } = getPaginationParams(query.page, query.limit);
 
-    const where: any = { status: 'ACTIVE' };
-
+    // ── Recherche textuelle → Meilisearch ────────────────────────────────────
     if (query.search) {
-      where.OR = [
-        { title: { contains: query.search, mode: 'insensitive' } },
-        { description: { contains: query.search, mode: 'insensitive' } },
-        { brand: { contains: query.search, mode: 'insensitive' } },
-        { model: { contains: query.search, mode: 'insensitive' } },
-      ];
+      // Résoudre le categoryId depuis le slug si fourni
+      let categoryId = query.categoryId;
+      if (!categoryId && query.categorySlug) {
+        const cat = await this.prisma.category.findUnique({ where: { slug: query.categorySlug } });
+        if (cat) categoryId = cat.id;
+      }
+
+      const { ids, total } = await this.search.search(query.search, {
+        categoryId,
+        condition: query.condition,
+        country: query.country,
+        city: query.city,
+        minPrice: query.minPrice,
+        maxPrice: query.maxPrice,
+        hasDelivery: query.hasDelivery,
+        isReconditioned: query.isReconditioned,
+        sellerId: query.sellerId,
+        sortBy: query.sortBy,
+        page,
+        limit,
+      });
+
+      if (!ids.length) {
+        return { message: 'Annonces récupérées', data: [], meta: paginate(0, page, limit) };
+      }
+
+      const products = await this.prisma.product.findMany({
+        where: { id: { in: ids } },
+        include: {
+          images: { where: { isPrimary: true }, take: 1 },
+          category: { select: { name: true, slug: true } },
+          seller: {
+            select: {
+              id: true, firstName: true,
+              sellerProfile: { select: { shopName: true, avgRating: true, isBadgeVerified: true } },
+            },
+          },
+          _count: { select: { reviews: true, favorites: true } },
+        },
+      });
+
+      // Remettre dans l'ordre retourné par Meilisearch (tri par pertinence)
+      const idOrder = new Map(ids.map((id, i) => [id, i]));
+      products.sort((a, b) => (idOrder.get(a.id) ?? 0) - (idOrder.get(b.id) ?? 0));
+
+      let favoriteIds: Set<string> = new Set();
+      if (userId) {
+        const favs = await this.prisma.favorite.findMany({
+          where: { userId, productId: { in: products.map((p) => p.id) } },
+          select: { productId: true },
+        });
+        favoriteIds = new Set(favs.map((f) => f.productId));
+      }
+
+      return {
+        message: 'Annonces récupérées',
+        data: products.map((p) => ({ ...p, isFavorite: favoriteIds.has(p.id) })),
+        meta: paginate(total, page, limit),
+      };
     }
+
+    // ── Pas de recherche textuelle → Prisma seul (filtres + tri) ────────────
+    const where: any = { status: 'ACTIVE' };
 
     if (query.categoryId) where.categoryId = query.categoryId;
     if (query.categorySlug) {
@@ -82,10 +141,7 @@ export class ProductsService {
 
     const [products, total] = await Promise.all([
       this.prisma.product.findMany({
-        where,
-        skip,
-        take,
-        orderBy,
+        where, skip, take, orderBy,
         include: {
           images: { where: { isPrimary: true }, take: 1 },
           category: { select: { name: true, slug: true } },
@@ -101,7 +157,6 @@ export class ProductsService {
       this.prisma.product.count({ where }),
     ]);
 
-    // Marquer les favoris si l'user est connecté
     let favoriteIds: Set<string> = new Set();
     if (userId) {
       const favs = await this.prisma.favorite.findMany({
@@ -111,11 +166,9 @@ export class ProductsService {
       favoriteIds = new Set(favs.map((f) => f.productId));
     }
 
-    const enriched = products.map((p) => ({ ...p, isFavorite: favoriteIds.has(p.id) }));
-
     return {
       message: 'Annonces récupérées',
-      data: enriched,
+      data: products.map((p) => ({ ...p, isFavorite: favoriteIds.has(p.id) })),
       meta: paginate(total, page, limit),
     };
   }
@@ -219,6 +272,9 @@ export class ProductsService {
       include: PRODUCT_INCLUDE as any,
     });
 
+    // Indexer dans Meilisearch (statut PENDING_REVIEW — sera visible une fois approuvé)
+    this.search.indexProduct(product).catch(() => null);
+
     return { message: 'Annonce créée et en attente de validation', data: product };
   }
 
@@ -227,12 +283,13 @@ export class ProductsService {
     if (!product) throw new NotFoundException('Annonce introuvable');
     if (product.sellerId !== sellerId) throw new ForbiddenException('Non autorisé');
 
-    const { tags, imageUrls, ...productData } = dto;
+    const { tags, imageUrls, categoryId, ...productData } = dto as any;
 
     const updated = await this.prisma.product.update({
       where: { id: productId },
       data: {
         ...productData,
+        ...(categoryId && { category: { connect: { id: categoryId } } }),
         status: 'PENDING_REVIEW',
         ...(tags && {
           tags: {
@@ -252,6 +309,9 @@ export class ProductsService {
       include: PRODUCT_INCLUDE as any,
     });
 
+    // Mettre à jour l'index Meilisearch
+    this.search.indexProduct(updated).catch(() => null);
+
     return { message: 'Annonce mise à jour', data: updated };
   }
 
@@ -264,6 +324,9 @@ export class ProductsService {
       where: { id: productId },
       data: { status: 'ARCHIVED' },
     });
+
+    // Retirer de l'index de recherche
+    this.search.deleteProduct(productId).catch(() => null);
 
     return { message: 'Annonce supprimée' };
   }
@@ -301,7 +364,16 @@ export class ProductsService {
         rejectionReason: approved ? null : reason,
         publishedAt: approved ? new Date() : null,
       },
+      include: { category: { select: { name: true } }, tags: true },
     });
+
+    // Indexer si approuvé, retirer si suspendu
+    if (approved) {
+      this.search.indexProduct(product).catch(() => null);
+    } else {
+      this.search.deleteProduct(productId).catch(() => null);
+    }
+
     return { message: approved ? 'Annonce approuvée' : 'Annonce rejetée', data: product };
   }
 
@@ -331,5 +403,16 @@ export class ProductsService {
       this.prisma.product.count({ where: { status: 'SOLD' } }),
     ]);
     return { total, active, pending, sold };
+  }
+
+  // ─── RÉINDEXATION BULK (admin) ───────────────────────────────────────────────
+
+  async reindexAll() {
+    const products = await this.prisma.product.findMany({
+      where: { status: 'ACTIVE' },
+      include: { category: { select: { name: true } }, tags: true },
+    });
+    await this.search.bulkIndex(products);
+    return { message: `${products.length} annonces réindexées dans Meilisearch` };
   }
 }
