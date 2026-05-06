@@ -52,7 +52,7 @@ describe('ProductsService', () => {
               title: 'Test', description: 'Desc', price: 10000,
               categoryId: 'cat-1', condition: 'NEW', quantity: 1,
               country: 'TG', guarantee: 'NONE', hasDelivery: false, isNegotiable: false, isReconditioned: false,
-            })
+            }, plan)
           ).rejects.toThrow(BadRequestException);
         }
       });
@@ -84,7 +84,7 @@ describe('ProductsService', () => {
         hasDelivery: true,
         isNegotiable: false,
         isReconditioned: false,
-      });
+      }, 'PREMIUM');
     });
   });
 

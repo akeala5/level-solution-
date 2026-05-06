@@ -177,19 +177,20 @@ model User {
 }
 
 model Profile {
-  id          String   @id @default(uuid())
-  userId      String   @unique
-  avatarUrl   String?
-  bio         String?
-  city        String?
-  country     String   @default("TG")
-  language    String   @default("fr")
-  currency    String   @default("XOF")
-  timezone    String   @default("Africa/Lome")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                String   @id @default(uuid())
+  userId            String   @unique
+  avatarUrl         String?
+  bio               String?
+  city              String?
+  country           String   @default("TG")
+  language          String   @default("fr")
+  currency          String   @default("XOF")
+  timezone          String   @default("Africa/Lome")
+  pushSubscription  String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("profiles")
 }

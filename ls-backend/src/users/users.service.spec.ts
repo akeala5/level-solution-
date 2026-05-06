@@ -99,7 +99,7 @@ describe('UsersService', () => {
 
       await expect(
         service.changePassword('user-1', {
-          currentPassword: 'wrong', newPassword: 'NewPass123!', confirmPassword: 'NewPass123!',
+          currentPassword: 'wrong', newPassword: 'NewPass123!',
         })
       ).rejects.toThrow(BadRequestException);
     });
@@ -111,7 +111,7 @@ describe('UsersService', () => {
       mockPrisma.user.update.mockResolvedValue({});
 
       const result = await service.changePassword('user-1', {
-        currentPassword: 'correct', newPassword: 'NewPass123!', confirmPassword: 'NewPass123!',
+        currentPassword: 'correct', newPassword: 'NewPass123!',
       });
 
       expect(mockPrisma.user.update).toHaveBeenCalledWith(
