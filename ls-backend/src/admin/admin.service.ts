@@ -391,6 +391,112 @@ export class AdminService {
     return { message: 'KYC refusé' };
   }
 
+  // ─── ESCROW ───────────────────────────────────────────────────────────────────
+
+  async getPendingEscrowPayments(page = 1, limit = 20) {
+    const { skip, take } = getPaginationParams(page, limit);
+
+    const [payments, total] = await Promise.all([
+      this.prisma.payment.findMany({
+        where: { method: 'BANK_TRANSFER', status: 'PENDING' },
+        skip, take,
+        orderBy: { createdAt: 'asc' },
+        include: {
+          order: {
+            select: {
+              id: true, orderNumber: true, totalAmount: true, createdAt: true,
+              buyer: { select: { id: true, firstName: true, lastName: true, email: true } },
+              seller: { select: { firstName: true, lastName: true, email: true } },
+            },
+          },
+        },
+      }),
+      this.prisma.payment.count({ where: { method: 'BANK_TRANSFER', status: 'PENDING' } }),
+    ]);
+
+    return { message: 'Virements Escrow en attente', data: payments, meta: paginate(total, page, limit) };
+  }
+
+  async confirmEscrowPayment(ref: string, adminId: string) {
+    const payments = await this.prisma.payment.findMany({
+      where: { providerRef: ref, method: 'BANK_TRANSFER', status: 'PENDING' },
+      include: { order: { include: { buyer: true } } },
+    });
+
+    if (!payments.length) throw new NotFoundException(`Aucun virement Escrow en attente pour la référence ${ref}`);
+
+    await this.prisma.$transaction([
+      ...payments.map((p) => this.prisma.payment.update({
+        where: { id: p.id },
+        data: { status: 'COMPLETED' },
+      })),
+      ...payments.map((p) => this.prisma.order.update({
+        where: { id: p.orderId },
+        data: { status: 'PAYMENT_CONFIRMED' },
+      })),
+      this.prisma.auditLog.create({
+        data: {
+          userId: adminId,
+          action: 'CONFIRM_ESCROW',
+          entity: 'Payment',
+          entityId: ref,
+          newData: { orderIds: payments.map((p) => p.orderId), ref },
+        },
+      }),
+    ]);
+
+    const buyer = payments[0].order.buyer;
+    await this.notifications.createNotification({
+      userId: buyer.id,
+      type: 'PAYMENT_RECEIVED',
+      title: 'Virement reçu — commande confirmée',
+      body: `Votre virement (réf. ${ref}) a été reçu et validé. Votre commande est maintenant en cours de traitement.`,
+    });
+
+    this.logger.log(`Escrow confirmé — ref ${ref} par admin ${adminId} (${payments.length} commande(s))`);
+    return { message: `Virement Escrow confirmé — ${payments.length} commande(s) passée(s) en PAYMENT_CONFIRMED` };
+  }
+
+  async rejectEscrowPayment(ref: string, reason: string, adminId: string) {
+    const payments = await this.prisma.payment.findMany({
+      where: { providerRef: ref, method: 'BANK_TRANSFER', status: 'PENDING' },
+      include: { order: { include: { buyer: true } } },
+    });
+
+    if (!payments.length) throw new NotFoundException(`Aucun virement Escrow en attente pour la référence ${ref}`);
+
+    await this.prisma.$transaction([
+      ...payments.map((p) => this.prisma.payment.update({
+        where: { id: p.id },
+        data: { status: 'FAILED' },
+      })),
+      ...payments.map((p) => this.prisma.order.update({
+        where: { id: p.orderId },
+        data: { status: 'CANCELLED', cancellationReason: `Virement non reçu : ${reason}` },
+      })),
+      this.prisma.auditLog.create({
+        data: {
+          userId: adminId,
+          action: 'REJECT_ESCROW',
+          entity: 'Payment',
+          entityId: ref,
+          newData: { reason, orderIds: payments.map((p) => p.orderId) },
+        },
+      }),
+    ]);
+
+    const buyer = payments[0].order.buyer;
+    await this.notifications.createNotification({
+      userId: buyer.id,
+      type: 'SYSTEM',
+      title: 'Virement non reçu — commande annulée',
+      body: `Nous n'avons pas reçu votre virement (réf. ${ref}). Motif : ${reason}. Contactez le support si besoin.`,
+    });
+
+    this.logger.log(`Escrow rejeté — ref ${ref} par admin ${adminId}`);
+    return { message: `Virement Escrow rejeté — ${payments.length} commande(s) annulée(s)` };
+  }
+
   // ─── TRANSACTIONS ──────────────────────────────────────────────────────────────
 
   async getPayments(page = 1, limit = 20, status?: string) {

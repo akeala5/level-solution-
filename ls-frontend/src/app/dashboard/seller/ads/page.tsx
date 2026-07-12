@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -30,19 +30,23 @@ type FormData = z.infer<typeof schema>
 export default function SponsoredAdsPage() {
   const router = useRouter()
   const qc = useQueryClient()
-  const { user, isAuthenticated } = useAuthStore()
+  const { user, isAuthenticated, _hasHydrated } = useAuthStore()
   const [showCreate, setShowCreate] = useState(false)
 
-  if (!isAuthenticated) { router.push('/auth/login'); return null }
+  useEffect(() => {
+    if (_hasHydrated && !isAuthenticated) router.push('/auth/login')
+  }, [_hasHydrated, isAuthenticated, router])
 
   const { data: adsData, isLoading: adsLoading } = useQuery({
     queryKey: ['sponsored-ads'],
     queryFn: () => api.get('/sponsored-ads').then((r) => r.data.data),
+    enabled: isAuthenticated,
   })
 
   const { data: productsData } = useQuery({
     queryKey: ['seller-products-select'],
-    queryFn: () => api.get('/products/my?status=PUBLISHED&limit=100').then((r) => r.data.data),
+    queryFn: () => api.get('/products/me/listings?status=ACTIVE&limit=100').then((r) => r.data.data),
+    enabled: isAuthenticated,
   })
 
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<FormData>({
@@ -68,6 +72,8 @@ export default function SponsoredAdsPage() {
     mutationFn: (id: string) => api.patch(`/sponsored-ads/${id}/toggle`),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['sponsored-ads'] }); toast.success('Statut mis à jour') },
   })
+
+  if (!_hasHydrated) return <div className="min-h-screen flex items-center justify-center"><Loader2 size={28} className="animate-spin text-primary" /></div>
 
   const ads = adsData?.ads || adsData || []
   const products = productsData?.products || productsData || []

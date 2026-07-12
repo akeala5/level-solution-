@@ -1,6 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { Suspense } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -26,7 +27,7 @@ const schema = z.object({
 })
 type FormData = z.infer<typeof schema>
 
-export default function RegisterPage() {
+function RegisterContent() {
   const router = useRouter()
   const params = useSearchParams()
   const { login } = useAuthStore()
@@ -182,9 +183,9 @@ export default function RegisterPage() {
 
             <p className="text-xs text-muted text-center">
               En créant un compte, vous acceptez nos{' '}
-              <Link href="/legal/cgu" className="text-primary hover:underline">CGU</Link>
+              <Link href="/legal" className="text-primary hover:underline">CGU</Link>
               {' '}et notre{' '}
-              <Link href="/legal/privacy" className="text-primary hover:underline">politique de confidentialité</Link>.
+              <Link href="/privacy" className="text-primary hover:underline">politique de confidentialité</Link>.
             </p>
           </form>
 
@@ -198,4 +199,8 @@ export default function RegisterPage() {
       </motion.div>
     </div>
   )
+}
+
+export default function RegisterPage() {
+  return <Suspense><RegisterContent /></Suspense>
 }

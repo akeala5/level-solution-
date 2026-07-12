@@ -1,0 +1,60 @@
+{
+  "nav": {
+    "topbar_payment": "Paiement Mobile Money disponible",
+    "topbar_countries": "Togo · Côte d'Ivoire · Sénégal · Ghana · Burkina",
+    "categories": "Catégories",
+    "browse_categories": "Parcourir les catégories",
+    "sell": "Vendre",
+    "search_placeholder": "Rechercher un produit, une marque...",
+    "search_action": "Lancer la recherche",
+    "reconditioned": "Reconditionné LS",
+    "pricing": "Tarifs vendeurs",
+    "help": "Aide",
+    "cart": "Panier",
+    "cart_count": "Panier — {count} article(s)",
+    "notifications": "Notifications",
+    "user_menu": "Menu utilisateur",
+    "open_menu": "Ouvrir le menu de navigation",
+    "close_menu": "Fermer le menu",
+    "browse_categories_label": "Parcourir les catégories",
+    "dashboard": "Dashboard",
+    "orders": "Mes commandes",
+    "favorites": "Mes favoris",
+    "messages": "Messages",
+    "settings": "Paramètres",
+    "logout": "Déconnexion",
+    "login": "Connexion",
+    "register": "Inscription"
+  },
+  "hero": {
+    "badge": "Marketplace N°1 en Afrique francophone",
+    "title_part1": "Achetez & Vendez",
+    "title_highlight": "tout",
+    "title_part2": "en toute sécurité",
+    "subtitle": "Informatique, mode, véhicules, immobilier — des milliers d'annonces vérifiées avec paiement Mobile Money sécurisé.",
+    "search_placeholder": "Que recherchez-vous ?",
+    "search_btn": "Rechercher",
+    "trending": "Tendances :",
+    "cta_sell": "Déposer une annonce",
+    "cta_browse": "Parcourir les annonces",
+    "trust_escrow": "Escrow sécurisé",
+    "trust_mobile": "Mobile Money",
+    "trust_verified": "Vendeurs vérifiés",
+    "slideshow_label": "Produits en vedette",
+    "slide_aria": "{label} — diapositive {current} sur {total}",
+    "see_listing": "Voir l'annonce →"
+  },
+  "common": {
+    "skip_to_content": "Aller au contenu principal",
+    "loading": "Chargement...",
+    "error": "Une erreur est survenue",
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "currency": "FCFA"
+  },
+  "language": {
+    "switch": "Changer la langue",
+    "fr": "Français",
+    "en": "English"
+  }
+}

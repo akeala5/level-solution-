@@ -128,6 +128,7 @@ export class ProductsService {
     }
     if (query.hasDelivery !== undefined) where.hasDelivery = query.hasDelivery;
     if (query.isReconditioned !== undefined) where.isReconditioned = query.isReconditioned;
+    if (query.isFlash) { where.isFlash = true; where.flashEndsAt = { gt: new Date() }; }
     if (query.sellerId) where.sellerId = query.sellerId;
 
     const sortMap: Record<string, any> = {
@@ -137,7 +138,7 @@ export class ProductsService {
       popular: { viewCount: 'desc' },
       newest: { createdAt: 'desc' },
     };
-    const orderBy = sortMap[query.sortBy] || { isFeatured: 'desc', createdAt: 'desc' };
+    const orderBy = sortMap[query.sortBy] || [{ isFeatured: 'desc' }, { createdAt: 'desc' }];
 
     const [products, total] = await Promise.all([
       this.prisma.product.findMany({
@@ -233,6 +234,40 @@ export class ProductsService {
     };
   }
 
+  async getForEdit(productId: string, sellerId: string) {
+    const product = await this.prisma.product.findUnique({
+      where: { id: productId },
+      include: PRODUCT_INCLUDE as any,
+    });
+    if (!product) throw new NotFoundException('Annonce introuvable');
+    if (product.sellerId !== sellerId) throw new ForbiddenException('Non autorisé');
+    return { message: 'Annonce récupérée', data: product };
+  }
+
+  async updateProductStatus(productId: string, sellerId: string, role: string, status: string) {
+    const product = await this.prisma.product.findUnique({ where: { id: productId } });
+    if (!product) throw new NotFoundException('Annonce introuvable');
+    if (product.sellerId !== sellerId && role !== 'ADMIN') throw new ForbiddenException('Non autorisé');
+
+    const allowed = ['ACTIVE', 'DRAFT'];
+    if (!allowed.includes(status)) {
+      throw new BadRequestException(`Statut ${status} non autorisé`);
+    }
+
+    const updated = await this.prisma.product.update({
+      where: { id: productId },
+      data: { status: status as any },
+    });
+
+    if (status === 'ACTIVE') {
+      this.search.indexProduct(updated).catch(() => null);
+    } else {
+      this.search.deleteProduct(productId).catch(() => null);
+    }
+
+    return { message: 'Statut mis à jour', data: updated };
+  }
+
   // ─── GESTION VENDEUR ──────────────────────────────────────────────────────────
 
   async create(sellerId: string, dto: CreateProductDto, plan: string) {
@@ -313,6 +348,30 @@ export class ProductsService {
     this.search.indexProduct(updated).catch(() => null);
 
     return { message: 'Annonce mise à jour', data: updated };
+  }
+
+  async deleteProductImage(productId: string, imageId: string, sellerId: string) {
+    const product = await this.prisma.product.findUnique({ where: { id: productId } });
+    if (!product) throw new NotFoundException('Annonce introuvable');
+    if (product.sellerId !== sellerId) throw new ForbiddenException('Non autorisé');
+
+    const image = await this.prisma.productImage.findUnique({ where: { id: imageId } });
+    if (!image || image.productId !== productId) throw new NotFoundException('Image introuvable');
+
+    await this.prisma.productImage.delete({ where: { id: imageId } });
+
+    // Si l'image supprimée était la principale, promouvoir la suivante
+    if (image.isPrimary) {
+      const next = await this.prisma.productImage.findFirst({
+        where: { productId },
+        orderBy: { order: 'asc' },
+      });
+      if (next) {
+        await this.prisma.productImage.update({ where: { id: next.id }, data: { isPrimary: true } });
+      }
+    }
+
+    return { message: 'Image supprimée' };
   }
 
   async delete(productId: string, sellerId: string, role: string) {
@@ -414,5 +473,68 @@ export class ProductsService {
     });
     await this.search.bulkIndex(products);
     return { message: `${products.length} annonces réindexées dans Meilisearch` };
+  }
+
+  // ─── FLASH SALES ──────────────────────────────────────────────────────────────
+  async setFlash(productId: string, sellerId: string, role: string, dto: { hours: number }) {
+    const product = await this.prisma.product.findUnique({ where: { id: productId } });
+    if (!product) throw new NotFoundException('Produit introuvable');
+    if (role !== 'ADMIN' && role !== 'MODERATOR' && product.sellerId !== sellerId) {
+      throw new ForbiddenException('Accès refusé');
+    }
+    const flashEndsAt = dto.hours > 0
+      ? new Date(Date.now() + dto.hours * 3_600_000)
+      : null;
+    return this.prisma.product.update({
+      where: { id: productId },
+      data: { isFlash: dto.hours > 0, flashEndsAt },
+    });
+  }
+
+  // ─── BUNDLE SELLER ───────────────────────────────────────────────────────────
+  async setBundle(
+    productId: string,
+    sellerId: string,
+    role: string,
+    dto: { isBundle: boolean; bundleItems?: { name: string; quantity: number; unitPrice?: number }[]; bundleDiscount?: number },
+  ) {
+    const product = await this.prisma.product.findUnique({ where: { id: productId } });
+    if (!product) throw new NotFoundException('Produit introuvable');
+    if (role !== 'ADMIN' && role !== 'MODERATOR' && product.sellerId !== sellerId) {
+      throw new ForbiddenException('Accès refusé');
+    }
+    if (dto.isBundle && (!dto.bundleItems || dto.bundleItems.length < 2)) {
+      throw new BadRequestException('Un lot doit contenir au moins 2 articles');
+    }
+    return this.prisma.product.update({
+      where: { id: productId },
+      data: {
+        isBundle: dto.isBundle,
+        bundleItems: dto.isBundle ? (dto.bundleItems as any) : null,
+        bundleDiscount: dto.isBundle ? (dto.bundleDiscount ?? null) : null,
+      },
+    });
+  }
+
+  // ─── SMART PRICING ────────────────────────────────────────────────────────────
+  async getPriceStats(categoryId: string) {
+    const rows = await this.prisma.product.findMany({
+      where: { categoryId, status: 'ACTIVE' },
+      select: { price: true },
+      orderBy: { price: 'asc' },
+    });
+    if (rows.length === 0) return null;
+    const values = rows.map((r) => r.price);
+    const n = values.length;
+    const median = n % 2 === 0
+      ? (values[n / 2 - 1] + values[n / 2]) / 2
+      : values[Math.floor(n / 2)];
+    return {
+      median: Math.round(median),
+      min:    values[0],
+      max:    values[n - 1],
+      count:  n,
+      suggested: Math.round(median / 500) * 500,
+    };
   }
 }

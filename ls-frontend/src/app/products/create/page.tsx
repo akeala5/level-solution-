@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -9,12 +9,12 @@ import { motion } from 'framer-motion'
 import Image from 'next/image'
 import {
   Upload, X, Plus, Loader2, ArrowLeft, Package,
-  Tag, MapPin, Truck, Info, CheckCircle, Image as ImageIcon
+  Tag, MapPin, Truck, Info, CheckCircle, Image as ImageIcon, TrendingUp, Layers,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '@/store/auth.store'
 import { Category } from '@/types'
-import { cn } from '@/lib/utils'
+import { cn, formatPrice } from '@/lib/utils'
 import api from '@/lib/api'
 import Link from 'next/link'
 
@@ -57,21 +57,26 @@ type FormData = z.infer<typeof schema>
 
 export default function CreateProductPage() {
   const router = useRouter()
-  const { user, isAuthenticated } = useAuthStore()
+  const { user, isAuthenticated, _hasHydrated } = useAuthStore()
   const [images, setImages] = useState<{ file: File; preview: string }[]>([])
-  const [uploadedImageIds, setUploadedImageIds] = useState<string[]>([])
   const [uploadingImages, setUploadingImages] = useState(false)
   const [selectedCondition, setSelectedCondition] = useState('NEW')
+  const [isBundle, setIsBundle] = useState(false)
+  const [bundleDiscount, setBundleDiscount] = useState(0)
+  const [bundleItems, setBundleItems] = useState<{ name: string; quantity: number; unitPrice: number }[]>([
+    { name: '', quantity: 1, unitPrice: 0 },
+    { name: '', quantity: 1, unitPrice: 0 },
+  ])
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  if (!isAuthenticated) {
-    router.push('/auth/login')
-    return null
-  }
+  useEffect(() => {
+    if (_hasHydrated && !isAuthenticated) router.push('/auth/login')
+  }, [_hasHydrated, isAuthenticated, router])
 
   const { data: categoriesData } = useQuery({
     queryKey: ['categories'],
     queryFn: () => api.get('/categories').then((r) => r.data.data as Category[]),
+    enabled: isAuthenticated,
   })
 
   const { register, handleSubmit, watch, setValue, formState: { errors, isSubmitting } } = useForm<FormData>({
@@ -88,6 +93,17 @@ export default function CreateProductPage() {
   })
 
   const hasDelivery = watch('hasDelivery')
+  const watchedCategoryId = watch('categoryId')
+
+  const { data: priceStats } = useQuery({
+    queryKey: ['price-stats', watchedCategoryId],
+    queryFn: () => api.get('/products/price-stats', { params: { categoryId: watchedCategoryId } })
+      .then((r) => r.data.data as { median: number; min: number; max: number; count: number; suggested: number } | null),
+    enabled: !!watchedCategoryId,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  if (!_hasHydrated) return <div className="min-h-screen flex items-center justify-center"><Loader2 size={28} className="animate-spin text-primary" /></div>
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
@@ -112,7 +128,7 @@ export default function CreateProductPage() {
     setImages((prev) => prev.filter((_, i) => i !== idx))
   }
 
-  const uploadImages = async (): Promise<string[]> => {
+  const uploadImages = async (): Promise<string[] | null> => {
     if (images.length === 0) return []
     setUploadingImages(true)
     const ids: string[] = []
@@ -121,15 +137,18 @@ export default function CreateProductPage() {
         const form = new FormData()
         form.append('file', img.file)
         form.append('type', 'product')
-        const res = await api.post('/upload', form, {
+        const res = await api.post('/upload/image', form, {
           headers: { 'Content-Type': 'multipart/form-data' },
         })
         ids.push(res.data.data.id || res.data.data.url)
       }
+      return ids
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Erreur lors de l'upload des photos")
+      return null
     } finally {
       setUploadingImages(false)
     }
-    return ids
   }
 
   const onSubmit = async (data: FormData) => {
@@ -140,6 +159,13 @@ export default function CreateProductPage() {
 
     try {
       const imageIds = await uploadImages()
+      if (imageIds === null) return
+
+      const validBundleItems = bundleItems.filter((i) => i.name.trim().length > 0)
+      if (isBundle && validBundleItems.length < 2) {
+        toast.error('Un lot doit contenir au moins 2 articles nommés')
+        return
+      }
 
       const payload = {
         ...data,
@@ -149,6 +175,9 @@ export default function CreateProductPage() {
         quantity: Number(data.quantity),
         imageIds,
         tags: data.tags ? data.tags.split(',').map((t) => t.trim()).filter(Boolean) : [],
+        isBundle,
+        bundleItems: isBundle ? validBundleItems : undefined,
+        bundleDiscount: isBundle && bundleDiscount > 0 ? bundleDiscount : undefined,
       }
 
       await api.post('/products', payload)
@@ -337,6 +366,30 @@ export default function CreateProductPage() {
                   className={`input ${errors.price ? 'input-error' : ''}`}
                 />
                 {errors.price && <p className="text-xs text-danger mt-1">{errors.price.message}</p>}
+
+                {/* Smart Pricing widget */}
+                {priceStats && priceStats.count >= 3 && (
+                  <div className="mt-2 p-3 bg-blue-50 border border-blue-100 rounded-xl">
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <TrendingUp size={13} className="text-blue-500" />
+                      <span className="text-xs font-semibold text-blue-700">Smart Pricing</span>
+                      <span className="text-[10px] text-blue-500">({priceStats.count} annonces similaires)</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-xs text-blue-700 space-y-0.5">
+                        <p>Médiane : <span className="font-bold">{formatPrice(priceStats.median)}</span></p>
+                        <p className="text-blue-500">Fourchette : {formatPrice(priceStats.min)} – {formatPrice(priceStats.max)}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setValue('price', priceStats.suggested, { shouldValidate: true })}
+                        className="shrink-0 text-xs font-semibold bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors"
+                      >
+                        Appliquer {formatPrice(priceStats.suggested)}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
               <div>
                 <label className="label">Prix original <span className="text-muted font-normal">(pour afficher la réduction)</span></label>
@@ -421,6 +474,116 @@ export default function CreateProductPage() {
                 </motion.div>
               )}
             </div>
+          </div>
+
+          {/* VENTE EN LOT */}
+          <div className="bg-white rounded-2xl p-5 border border-border/50 shadow-card space-y-4">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isBundle}
+                onChange={(e) => setIsBundle(e.target.checked)}
+                className="w-4 h-4 accent-violet-600"
+              />
+              <div className="flex items-center gap-2">
+                <Layers size={17} className="text-violet-600" />
+                <div>
+                  <span className="text-sm font-medium text-dark">Vente en lot (bundle)</span>
+                  <p className="text-xs text-muted">Plusieurs articles vendus ensemble à un prix groupé</p>
+                </div>
+              </div>
+            </label>
+
+            {isBundle && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                className="space-y-3"
+              >
+                <div className="p-3 bg-violet-50 rounded-xl border border-violet-100">
+                  <p className="text-xs text-violet-700 font-medium mb-3">Articles inclus dans le lot</p>
+                  <div className="space-y-2">
+                    {bundleItems.map((item, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          placeholder={`Article ${idx + 1} (ex: Chargeur USB-C)`}
+                          value={item.name}
+                          onChange={(e) => {
+                            const next = [...bundleItems]
+                            next[idx] = { ...next[idx], name: e.target.value }
+                            setBundleItems(next)
+                          }}
+                          className="input flex-1 text-sm py-2"
+                        />
+                        <input
+                          type="number"
+                          min="1"
+                          value={item.quantity}
+                          onChange={(e) => {
+                            const next = [...bundleItems]
+                            next[idx] = { ...next[idx], quantity: Number(e.target.value) || 1 }
+                            setBundleItems(next)
+                          }}
+                          className="input w-16 text-sm py-2 text-center"
+                          title="Quantité"
+                        />
+                        <input
+                          type="number"
+                          min="0"
+                          placeholder="Prix unit."
+                          value={item.unitPrice || ''}
+                          onChange={(e) => {
+                            const next = [...bundleItems]
+                            next[idx] = { ...next[idx], unitPrice: Number(e.target.value) || 0 }
+                            setBundleItems(next)
+                          }}
+                          className="input w-28 text-sm py-2"
+                          title="Prix unitaire (optionnel)"
+                        />
+                        {bundleItems.length > 2 && (
+                          <button
+                            type="button"
+                            onClick={() => setBundleItems(bundleItems.filter((_, i) => i !== idx))}
+                            className="w-7 h-7 rounded-lg bg-red-50 text-red-400 hover:bg-red-100 flex items-center justify-center shrink-0"
+                          >
+                            <X size={12} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  {bundleItems.length < 10 && (
+                    <button
+                      type="button"
+                      onClick={() => setBundleItems([...bundleItems, { name: '', quantity: 1, unitPrice: 0 }])}
+                      className="mt-2 flex items-center gap-1.5 text-xs text-violet-600 hover:text-violet-800 font-medium"
+                    >
+                      <Plus size={12} /> Ajouter un article
+                    </button>
+                  )}
+                </div>
+
+                <div>
+                  <label className="label">Remise du lot (%) — optionnel</label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="range"
+                      min="0"
+                      max="80"
+                      step="5"
+                      value={bundleDiscount}
+                      onChange={(e) => setBundleDiscount(Number(e.target.value))}
+                      className="flex-1 accent-violet-600"
+                    />
+                    <span className="w-14 text-center font-bold text-violet-700 text-sm bg-violet-50 rounded-lg py-1 border border-violet-200">
+                      {bundleDiscount > 0 ? `-${bundleDiscount}%` : 'Aucune'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted mt-1">Affiché sur la fiche produit pour inciter à l'achat du lot</p>
+                </div>
+              </motion.div>
+            )}
           </div>
 
           {/* Submit */}

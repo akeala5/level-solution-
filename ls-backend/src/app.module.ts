@@ -24,6 +24,8 @@ import { AuctionsModule } from './auctions/auctions.module';
 import { SearchAlertsModule } from './search-alerts/search-alerts.module';
 import { SearchModule } from './search/search.module';
 import { SponsoredAdsModule } from './sponsored-ads/sponsored-ads.module';
+import { ReferralsModule } from './referrals/referrals.module';
+import { WebhooksModule } from './webhooks/webhooks.module';
 
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -86,6 +88,8 @@ import { SearchAlertsJob } from './common/jobs/search-alerts.job';
     SearchAlertsModule,
     SearchModule,
     SponsoredAdsModule,
+    ReferralsModule,
+    WebhooksModule,
   ],
   controllers: [HealthController],
   providers: [

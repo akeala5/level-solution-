@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Put, Post, Body, Param,
+  Controller, Get, Put, Post, Body, Param, Patch,
   Query, HttpCode, HttpStatus, ParseIntPipe, DefaultValuePipe,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
@@ -154,6 +154,40 @@ export class AdminController {
     @CurrentUser('id') adminId: string,
   ) {
     return this.adminService.rejectKyc(userId, body.notes, adminId);
+  }
+
+  // ─── ESCROW ───────────────────────────────────────────────────────────────────
+
+  @Get('payments/escrow/pending')
+  @ApiOperation({ summary: 'Lister les virements Escrow en attente de confirmation' })
+  getPendingEscrowPayments(
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
+  ) {
+    return this.adminService.getPendingEscrowPayments(page, limit);
+  }
+
+  @Patch('payments/escrow/:ref/confirm')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Confirmer un virement Escrow reçu → PAYMENT_CONFIRMED' })
+  @Roles('ADMIN')
+  confirmEscrow(
+    @Param('ref') ref: string,
+    @CurrentUser('id') adminId: string,
+  ) {
+    return this.adminService.confirmEscrowPayment(ref, adminId);
+  }
+
+  @Patch('payments/escrow/:ref/reject')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Rejeter un virement Escrow non reçu → CANCELLED' })
+  @Roles('ADMIN')
+  rejectEscrow(
+    @Param('ref') ref: string,
+    @Body() body: { reason: string },
+    @CurrentUser('id') adminId: string,
+  ) {
+    return this.adminService.rejectEscrowPayment(ref, body.reason, adminId);
   }
 
   // ─── TRANSACTIONS ──────────────────────────────────────────────────────────────

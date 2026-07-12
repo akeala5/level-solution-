@@ -29,6 +29,7 @@ export class ResponseInterceptor<T> implements NestInterceptor<T, ApiResponse<T>
             statusCode,
             message: data.message,
             data: data.data,
+            ...(data.meta !== undefined && { meta: data.meta }),
             timestamp: new Date().toISOString(),
           };
         }

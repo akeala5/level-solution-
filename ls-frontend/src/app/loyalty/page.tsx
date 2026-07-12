@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
@@ -27,23 +27,23 @@ const REWARDS = [
 
 export default function LoyaltyPage() {
   const router = useRouter()
-  const { user, isAuthenticated } = useAuthStore()
+  const { user, isAuthenticated, _hasHydrated } = useAuthStore()
   const [activeTab, setActiveTab] = useState<'overview' | 'history' | 'rewards'>('overview')
 
-  if (!isAuthenticated) {
-    router.push('/auth/login?redirect=/loyalty')
-    return null
-  }
+  useEffect(() => {
+    if (_hasHydrated && !isAuthenticated) router.push('/auth/login?redirect=/loyalty')
+  }, [_hasHydrated, isAuthenticated, router])
 
   const { data: loyaltyData, isLoading } = useQuery({
     queryKey: ['loyalty'],
     queryFn: () => api.get('/users/me/loyalty').then((r) => r.data.data),
+    enabled: isAuthenticated,
   })
 
   const { data: historyData, isLoading: histLoading } = useQuery({
     queryKey: ['loyalty-history'],
     queryFn: () => api.get('/users/me/loyalty/transactions?limit=30').then((r) => r.data.data),
-    enabled: activeTab === 'history',
+    enabled: isAuthenticated && activeTab === 'history',
   })
 
   const redeemMutation = useMutation({
@@ -53,6 +53,8 @@ export default function LoyaltyPage() {
     },
     onError: (err: any) => toast.error(err.response?.data?.message || 'Solde insuffisant'),
   })
+
+  if (!_hasHydrated) return <div className="min-h-screen flex items-center justify-center"><Loader2 size={28} className="animate-spin text-primary" /></div>
 
   const loyalty: LoyaltyAccount = loyaltyData || { points: 0, level: 'BRONZE' }
   const currentLevel = LEVELS.find((l) => l.level === loyalty.level) || LEVELS[0]

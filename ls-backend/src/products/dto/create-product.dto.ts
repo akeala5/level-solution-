@@ -32,6 +32,11 @@ export class CreateProductDto {
   @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0) deliveryPrice?: number;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() isNegotiable?: boolean;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() isReconditioned?: boolean;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() isBundle?: boolean;
+  @ApiPropertyOptional({ description: 'Articles du lot : [{name, quantity, unitPrice?}]' })
+  @IsOptional() @IsArray() bundleItems?: { name: string; quantity: number; unitPrice?: number }[];
+  @ApiPropertyOptional({ description: 'Remise bundle en % (ex: 15 = -15%)' })
+  @IsOptional() @IsNumber() @Min(0) @Max(80) @Type(() => Number) bundleDiscount?: number;
   @ApiPropertyOptional() @IsOptional() @IsArray() @IsString({ each: true }) tags?: string[];
   @ApiPropertyOptional() @IsOptional() @IsArray() imageUrls?: string[];
 }
@@ -50,6 +55,8 @@ export class ProductQueryDto {
   @ApiPropertyOptional() @IsOptional() @IsNumber() @Type(() => Number) maxPrice?: number;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() hasDelivery?: boolean;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() isReconditioned?: boolean;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() isFlash?: boolean;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() isBundle?: boolean;
   @ApiPropertyOptional({ enum: ['price_asc', 'price_desc', 'newest', 'oldest', 'popular'] })
   @IsOptional() sortBy?: string;
   @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(1) @Type(() => Number) page?: number;

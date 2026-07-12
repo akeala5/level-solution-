@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { motion } from 'framer-motion'
 import { Lock, Eye, EyeOff, Loader2, CheckCircle, AlertCircle } from 'lucide-react'
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
 import toast from 'react-hot-toast'
 import api from '@/lib/api'
 
@@ -19,7 +19,7 @@ const schema = z.object({
 })
 type FormData = z.infer<typeof schema>
 
-export default function ResetPasswordPage() {
+function ResetPasswordContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const token = searchParams.get('token')
@@ -147,4 +147,8 @@ export default function ResetPasswordPage() {
       </motion.div>
     </div>
   )
+}
+
+export default function ResetPasswordPage() {
+  return <Suspense><ResetPasswordContent /></Suspense>
 }

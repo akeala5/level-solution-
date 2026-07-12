@@ -58,22 +58,21 @@ type FormData = z.infer<typeof schema>
 export default function EditProductPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
-  const { isAuthenticated } = useAuthStore()
+  const { isAuthenticated, _hasHydrated } = useAuthStore()
   const [existingImages, setExistingImages] = useState<{ id: string; url: string }[]>([])
   const [newImages, setNewImages] = useState<{ file: File; preview: string }[]>([])
   const [uploadingImages, setUploadingImages] = useState(false)
   const [selectedCondition, setSelectedCondition] = useState('NEW')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  if (!isAuthenticated) {
-    router.push('/auth/login')
-    return null
-  }
+  useEffect(() => {
+    if (_hasHydrated && !isAuthenticated) router.push('/auth/login')
+  }, [_hasHydrated, isAuthenticated, router])
 
   const { data: product, isLoading: productLoading } = useQuery({
     queryKey: ['product-edit', id],
     queryFn: () => api.get(`/products/${id}/edit`).then((r) => r.data.data as Product),
-    enabled: !!id,
+    enabled: !!id && isAuthenticated,
   })
 
   const { data: categoriesData } = useQuery({
@@ -110,6 +109,8 @@ export default function EditProductPage() {
   }, [product, reset])
 
   const hasDelivery = watch('hasDelivery')
+
+  if (!_hasHydrated) return <div className="min-h-screen flex items-center justify-center"><Loader2 size={28} className="animate-spin text-primary" /></div>
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
@@ -150,7 +151,7 @@ export default function EditProductPage() {
           const form = new FormData()
           form.append('file', img.file)
           form.append('type', 'product')
-          const res = await api.post('/upload', form, { headers: { 'Content-Type': 'multipart/form-data' } })
+          const res = await api.post('/upload/image', form, { headers: { 'Content-Type': 'multipart/form-data' } })
           newImageIds.push(res.data.data.id || res.data.data.url)
         }
         setUploadingImages(false)

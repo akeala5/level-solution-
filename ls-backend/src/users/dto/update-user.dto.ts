@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsOptional, MinLength, MaxLength, Matches, IsEnum } from 'class-validator';
+import { IsString, IsOptional, MinLength, MaxLength, Matches, IsEnum, IsObject } from 'class-validator';
 
 export class UpdateProfileDto {
   @ApiPropertyOptional() @IsOptional() @IsString() @MinLength(2) firstName?: string;
@@ -11,6 +11,8 @@ export class UpdateProfileDto {
   @ApiPropertyOptional({ enum: ['fr', 'en'] }) @IsOptional() @IsEnum(['fr', 'en']) language?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() currency?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() timezone?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() avatarUrl?: string;
+  @ApiPropertyOptional() @IsOptional() @IsObject() notificationPreferences?: Record<string, boolean>;
 }
 
 export class UpdateSellerProfileDto {

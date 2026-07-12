@@ -3,7 +3,8 @@ import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, Shield, Zap, Award, Laptop, Cpu, Wifi, Monitor, HardDrive, Printer, Smartphone, Camera, Headphones, Keyboard } from 'lucide-react'
+import { Search, Shield, Zap, Award, Laptop, Cpu, Wifi, Monitor, HardDrive, Printer, Smartphone, Camera, Headphones, Keyboard, Plus } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 
 const TRENDING = ['Laptop gaming', 'RTX 4080', 'MacBook Pro', 'iPhone recondit.', 'Switch réseau']
 
@@ -15,12 +16,6 @@ const floatingCards = [
   { icon: HardDrive, label: 'SSD Samsung 2TB',   price: '95 000 FCFA',    badge: 'Neuf',             color: 'from-cyan-500 to-cyan-600',     topColor: '#06B6D4', delay: 0.32 },
   { icon: Printer,   label: 'HP LaserJet Pro',   price: '180 000 FCFA',   badge: 'Bon état',         color: 'from-rose-500 to-rose-600',     topColor: '#F43F5E', delay: 0.4  },
   { icon: Laptop,    label: 'Dell XPS 15 OLED',  price: '980 000 FCFA',   badge: 'Reconditionné LS', color: 'from-indigo-500 to-indigo-600', topColor: '#6366F1', delay: 0.48 },
-]
-
-const stats = [
-  { value: '10k+', label: 'Annonces actives' },
-  { value: '2.4k', label: 'Vendeurs vérifiés' },
-  { value: '98%',  label: 'Satisfaction' },
 ]
 
 const carouselProducts = [
@@ -56,6 +51,7 @@ export default function HeroSection() {
   }
 
   const slide = carouselProducts[slideIndex]
+  const t = useTranslations('hero')
 
   return (
     <section className="relative overflow-hidden bg-gradient-hero min-h-[640px] flex items-center">
@@ -74,17 +70,17 @@ export default function HeroSection() {
             <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
               <div className="inline-flex items-center gap-2 bg-white/10 text-white/90 text-xs font-medium px-4 py-2 rounded-full border border-white/20 mb-6">
                 <Zap size={12} className="text-yellow-400" />
-                Marketplace N°1 en Afrique francophone
+                {t('badge')}
               </div>
 
               <h1 className="heading-xl text-white mb-4">
-                Achetez &amp; Vendez{' '}
-                <span className="text-yellow-400">tout</span>{' '}
-                en toute sécurité
+                {t('title_part1')}{' '}
+                <span className="text-yellow-400">{t('title_highlight')}</span>{' '}
+                {t('title_part2')}
               </h1>
 
               <p className="text-white/70 text-lg leading-relaxed mb-8 max-w-xl">
-                Informatique, mode, véhicules, immobilier — des milliers d&apos;annonces vérifiées avec paiement Mobile Money sécurisé.
+                {t('subtitle')}
               </p>
 
               {/* Search */}
@@ -94,19 +90,19 @@ export default function HeroSection() {
                     type="text"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Que recherchez-vous ?"
+                    placeholder={t('search_placeholder')}
                     className="flex-1 bg-transparent text-white placeholder:text-white/50 px-4 py-3 text-sm focus:outline-none"
                   />
                   <button type="submit" className="btn-accent rounded-xl px-6 py-3 shrink-0 flex items-center gap-1">
                     <Search size={18} />
-                    <span className="hidden sm:inline text-sm font-semibold">Rechercher</span>
+                    <span className="hidden sm:inline text-sm font-semibold">{t('search_btn')}</span>
                   </button>
                 </div>
               </form>
 
               {/* Trending */}
               <div className="flex items-center flex-wrap gap-2 mb-5">
-                <span className="text-white/50 text-xs">Tendances :</span>
+                <span className="text-white/50 text-xs">{t('trending')}</span>
                 {TRENDING.map((term) => (
                   <button key={term}
                     onClick={() => router.push(`/products?search=${encodeURIComponent(term)}`)}
@@ -116,24 +112,24 @@ export default function HeroSection() {
                 ))}
               </div>
 
-              {/* Stats */}
-              <div className="flex items-center gap-5">
-                {stats.map((s, i) => (
-                  <motion.div key={s.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.5 + i * 0.1 }} className="flex items-center gap-2">
-                    <span className="text-xl font-black text-yellow-400 leading-none">{s.value}</span>
-                    <span className="text-white/60 text-xs leading-tight">{s.label}</span>
-                    {i < stats.length - 1 && <span className="text-white/20 ml-3">|</span>}
-                  </motion.div>
-                ))}
+              {/* CTAs */}
+              <div className="flex flex-wrap items-center gap-3 mt-2">
+                <Link href="/products/create"
+                  className="flex items-center gap-2 bg-yellow-400 hover:bg-yellow-300 text-dark font-bold px-5 py-2.5 rounded-xl text-sm transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5">
+                  <Zap size={16} /> {t('cta_sell')}
+                </Link>
+                <Link href="/products"
+                  className="flex items-center gap-2 bg-white/15 hover:bg-white/25 text-white border border-white/20 px-5 py-2.5 rounded-xl text-sm font-medium transition-all">
+                  <Search size={15} /> {t('cta_browse')}
+                </Link>
               </div>
 
               {/* Trust */}
               <div className="flex flex-wrap gap-4 mt-5">
                 {[
-                  { icon: Shield, text: 'Escrow sécurisé' },
-                  { icon: Zap,    text: 'Mobile Money' },
-                  { icon: Award,  text: 'Vendeurs vérifiés' },
+                  { icon: Shield, text: t('trust_escrow') },
+                  { icon: Zap,    text: t('trust_mobile') },
+                  { icon: Award,  text: t('trust_verified') },
                 ].map(({ icon: Icon, text }) => (
                   <div key={text} className="flex items-center gap-2 text-white/60 text-xs">
                     <Icon size={13} className="text-accent" />
@@ -146,6 +142,9 @@ export default function HeroSection() {
 
           {/* ── COL 2 : Slideshow ── */}
           <div className="hidden lg:flex flex-col items-center justify-center h-[520px]">
+            <div aria-live="polite" aria-atomic="true" className="sr-only">
+              {carouselProducts[slideIndex].label}
+            </div>
             <AnimatePresence mode="wait">
               <motion.div
                 key={slideIndex}
@@ -191,10 +190,13 @@ export default function HeroSection() {
             </AnimatePresence>
 
             {/* Dots */}
-            <div className="flex gap-1.5 mt-4">
-              {carouselProducts.map((_, i) => (
+            <div role="tablist" aria-label={t('slideshow_label')} className="flex gap-1.5 mt-4">
+              {carouselProducts.map((product, i) => (
                 <button
                   key={i}
+                  role="tab"
+                  aria-selected={i === slideIndex}
+                  aria-label={t('slide_aria', { label: product.label, current: i + 1, total: carouselProducts.length })}
                   onClick={() => setSlideIndex(i)}
                   className={`rounded-full transition-all duration-300 ${
                     i === slideIndex ? 'w-4 h-1.5 bg-white' : 'w-1.5 h-1.5 bg-white/30'

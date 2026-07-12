@@ -1,0 +1,60 @@
+{
+  "nav": {
+    "topbar_payment": "Mobile Money payments available",
+    "topbar_countries": "Togo · Côte d'Ivoire · Senegal · Ghana · Burkina Faso",
+    "categories": "Categories",
+    "browse_categories": "Browse categories",
+    "sell": "Sell",
+    "search_placeholder": "Search for a product, a brand...",
+    "search_action": "Launch search",
+    "reconditioned": "LS Refurbished",
+    "pricing": "Seller pricing",
+    "help": "Help",
+    "cart": "Cart",
+    "cart_count": "Cart — {count} item(s)",
+    "notifications": "Notifications",
+    "user_menu": "User menu",
+    "open_menu": "Open navigation menu",
+    "close_menu": "Close menu",
+    "browse_categories_label": "Browse categories",
+    "dashboard": "Dashboard",
+    "orders": "My orders",
+    "favorites": "My favorites",
+    "messages": "Messages",
+    "settings": "Settings",
+    "logout": "Sign out",
+    "login": "Sign in",
+    "register": "Sign up"
+  },
+  "hero": {
+    "badge": "West Africa's #1 Marketplace",
+    "title_part1": "Buy & Sell",
+    "title_highlight": "everything",
+    "title_part2": "safely",
+    "subtitle": "IT equipment, fashion, vehicles, real estate — thousands of verified listings with secure Mobile Money payments.",
+    "search_placeholder": "What are you looking for?",
+    "search_btn": "Search",
+    "trending": "Trending:",
+    "cta_sell": "Post a listing",
+    "cta_browse": "Browse listings",
+    "trust_escrow": "Secure Escrow",
+    "trust_mobile": "Mobile Money",
+    "trust_verified": "Verified sellers",
+    "slideshow_label": "Featured products",
+    "slide_aria": "{label} — slide {current} of {total}",
+    "see_listing": "View listing →"
+  },
+  "common": {
+    "skip_to_content": "Skip to main content",
+    "loading": "Loading...",
+    "error": "An error occurred",
+    "save": "Save",
+    "cancel": "Cancel",
+    "currency": "FCFA"
+  },
+  "language": {
+    "switch": "Change language",
+    "fr": "Français",
+    "en": "English"
+  }
+}

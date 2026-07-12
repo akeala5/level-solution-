@@ -67,3 +67,4 @@ generate_projets_pro.mjs
 
 # ─── NGINX (remplacé par Apache) ──────────────────────────────────────────────
 nginx/
+key.txt

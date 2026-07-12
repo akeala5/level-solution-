@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -8,15 +8,20 @@ import Link from 'next/link'
 import {
   Heart, Share2, Flag, ChevronLeft, ChevronRight, Star, MapPin, Package,
   Truck, Shield, MessageSquare, ShoppingCart, Zap, Check, ChevronDown,
-  User, Calendar, Eye, Award, RefreshCw, Loader2, X, ZoomIn
+  User, Calendar, Eye, Award, RefreshCw, Loader2, X, ZoomIn, Layers
 } from 'lucide-react'
+import { Swiper, SwiperSlide } from 'swiper/react'
+import { A11y } from 'swiper/modules'
+import type { Swiper as SwiperClass } from 'swiper'
+import 'swiper/css'
 import toast from 'react-hot-toast'
 import api from '@/lib/api'
 import { useAuthStore } from '@/store/auth.store'
 import { useCartStore } from '@/store/cart.store'
 import { Product, Review } from '@/types'
-import { cn, formatPrice, timeAgo, getConditionLabel } from '@/lib/utils'
+import { cn, formatPrice, timeAgo, getConditionLabel, imgBlurDataURL } from '@/lib/utils'
 import ProductCard from '@/components/product/ProductCard'
+import { useRecentlyViewed } from '@/hooks/useRecentlyViewed'
 
 const CONDITION_COLORS: Record<string, string> = {
   NEW: 'bg-emerald-100 text-emerald-700',
@@ -31,17 +36,24 @@ export default function ProductDetailPage() {
   const qc = useQueryClient()
   const { user, isAuthenticated } = useAuthStore()
   const { addItem } = useCartStore()
+  const { addItem: addRecentlyViewed } = useRecentlyViewed()
 
   const [activeImg, setActiveImg] = useState(0)
   const [lightbox, setLightbox] = useState(false)
   const [isFav, setIsFav] = useState(false)
   const [showFullDesc, setShowFullDesc] = useState(false)
+  const swiperRef = useRef<SwiperClass | null>(null)
 
   const { data, isLoading } = useQuery({
     queryKey: ['product', slug],
-    queryFn: () => api.get(`/products/${slug}`).then((r) => r.data.data as { product: Product; similar: Product[] }),
+    queryFn: () => api.get(`/products/${slug}`).then((r) => r.data.data as Product & { similar: Product[]; reviews: any[] }),
     enabled: !!slug,
   })
+
+  useEffect(() => {
+    if (data?.id) addRecentlyViewed(data)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.id])
 
   const { data: reviewsData } = useQuery({
     queryKey: ['product-reviews', slug],
@@ -50,7 +62,7 @@ export default function ProductDetailPage() {
   })
 
   const favMutation = useMutation({
-    mutationFn: () => api.post(`/users/me/favorites/${data?.product?.id}`),
+    mutationFn: () => api.post(`/users/me/favorites/${data?.id}`),
     onSuccess: (res) => {
       setIsFav(res.data.data.isFavorite)
       toast.success(res.data.data.isFavorite ? 'Ajouté aux favoris' : 'Retiré des favoris')
@@ -62,8 +74,8 @@ export default function ProductDetailPage() {
   })
 
   const handleAddToCart = () => {
-    if (!data?.product) return
-    addItem({ id: data.product.id, title: data.product.title, price: data.product.price, image: data.product.images?.[0]?.url || '', sellerId: data.product.sellerId, slug: data.product.slug })
+    if (!data) return
+    addItem({ productId: data.id, title: data.title, price: data.price, imageUrl: data.images?.[0]?.url || '', sellerId: data.sellerId, quantity: 1, hasDelivery: data.hasDelivery ?? false, deliveryPrice: data.deliveryPrice ?? 0 })
     toast.success('Ajouté au panier !')
   }
 
@@ -75,7 +87,7 @@ export default function ProductDetailPage() {
 
   const handleContact = () => {
     if (!isAuthenticated) { router.push('/auth/login'); return }
-    router.push(`/chat?seller=${data?.product?.seller?.id}`)
+    router.push(`/chat?seller=${data?.seller?.id}`)
   }
 
   if (isLoading) {
@@ -86,7 +98,7 @@ export default function ProductDetailPage() {
     )
   }
 
-  if (!data?.product) {
+  if (!data?.id) {
     return (
       <div className="container-custom py-20 text-center">
         <div className="text-5xl mb-4">😕</div>
@@ -97,7 +109,8 @@ export default function ProductDetailPage() {
     )
   }
 
-  const { product, similar } = data
+  const product = data
+  const similar = data.similar || []
   const images = product.images?.length ? product.images : [{ url: '/placeholder.jpg', id: '0' }]
   const discount = product.originalPrice && product.originalPrice > product.price
     ? Math.round((1 - product.price / product.originalPrice) * 100) : 0
@@ -160,21 +173,42 @@ export default function ProductDetailPage() {
             <div className="space-y-5">
               {/* Image Gallery */}
               <div className="bg-white rounded-2xl overflow-hidden border border-border/50 shadow-card">
-                {/* Main image */}
-                <div className="relative aspect-[4/3] bg-surface cursor-zoom-in group" onClick={() => setLightbox(true)}>
-                  <Image
-                    src={images[activeImg]?.url || '/placeholder.jpg'}
-                    alt={product.title}
-                    fill
-                    className="object-contain p-4"
-                    priority
-                  />
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-all flex items-center justify-center">
-                    <ZoomIn size={24} className="text-white opacity-0 group-hover:opacity-100 drop-shadow-lg transition-all" />
-                  </div>
+                {/* Main image — Swiper pour swipe mobile natif */}
+                <div className="relative bg-surface">
+                  <Swiper
+                    modules={[A11y]}
+                    slidesPerView={1}
+                    spaceBetween={0}
+                    onSwiper={(s) => { swiperRef.current = s }}
+                    onSlideChange={(s) => setActiveImg(s.activeIndex)}
+                    a11y={{ prevSlideMessage: 'Image précédente', nextSlideMessage: 'Image suivante' }}
+                    className="w-full"
+                  >
+                    {images.map((img, i) => (
+                      <SwiperSlide key={img.id}>
+                        <div
+                          className="relative aspect-[4/3] cursor-zoom-in group"
+                          onClick={() => setLightbox(true)}
+                        >
+                          <Image
+                            src={img.url || '/placeholder.jpg'}
+                            alt={product.title}
+                            fill
+                            className="object-contain p-4"
+                            priority={i === 0}
+                            placeholder="blur"
+                            blurDataURL={imgBlurDataURL}
+                          />
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-all flex items-center justify-center pointer-events-none">
+                            <ZoomIn size={24} className="text-white opacity-0 group-hover:opacity-100 drop-shadow-lg transition-all" />
+                          </div>
+                        </div>
+                      </SwiperSlide>
+                    ))}
+                  </Swiper>
 
                   {/* Badges */}
-                  <div className="absolute top-3 left-3 flex flex-col gap-1.5">
+                  <div className="absolute top-3 left-3 flex flex-col gap-1.5 z-10 pointer-events-none">
                     {discount > 0 && <span className="badge bg-danger text-white text-xs font-bold px-2 py-0.5">-{discount}%</span>}
                     {product.isReconditioned && (
                       <span className="flex items-center gap-1 bg-accent text-white text-xs font-bold px-2 py-0.5 rounded-full">
@@ -183,17 +217,32 @@ export default function ProductDetailPage() {
                     )}
                   </div>
 
-                  {/* Nav arrows */}
-                  {images.length > 1 && <>
-                    <button onClick={(e) => { e.stopPropagation(); setActiveImg((p) => (p - 1 + images.length) % images.length) }}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 w-8 h-8 bg-white/90 shadow rounded-full flex items-center justify-center hover:bg-white">
-                      <ChevronLeft size={16} />
-                    </button>
-                    <button onClick={(e) => { e.stopPropagation(); setActiveImg((p) => (p + 1) % images.length) }}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 bg-white/90 shadow rounded-full flex items-center justify-center hover:bg-white">
-                      <ChevronRight size={16} />
-                    </button>
-                  </>}
+                  {/* Flèches desktop */}
+                  {images.length > 1 && (
+                    <>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); swiperRef.current?.slidePrev() }}
+                        aria-label="Image précédente"
+                        className="absolute left-3 top-1/2 -translate-y-1/2 z-10 w-8 h-8 bg-white/90 shadow rounded-full flex items-center justify-center hover:bg-white"
+                      >
+                        <ChevronLeft size={16} />
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); swiperRef.current?.slideNext() }}
+                        aria-label="Image suivante"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 z-10 w-8 h-8 bg-white/90 shadow rounded-full flex items-center justify-center hover:bg-white"
+                      >
+                        <ChevronRight size={16} />
+                      </button>
+                    </>
+                  )}
+
+                  {/* Compteur */}
+                  {images.length > 1 && (
+                    <div className="absolute bottom-3 right-3 z-10 bg-black/40 text-white text-xs px-2 py-0.5 rounded-full backdrop-blur-sm select-none">
+                      {activeImg + 1}/{images.length}
+                    </div>
+                  )}
                 </div>
 
                 {/* Thumbnails */}
@@ -202,10 +251,10 @@ export default function ProductDetailPage() {
                     {images.map((img, i) => (
                       <button
                         key={img.id}
-                        onClick={() => setActiveImg(i)}
+                        onClick={() => { setActiveImg(i); swiperRef.current?.slideTo(i) }}
                         className={cn('w-16 h-16 flex-shrink-0 rounded-lg overflow-hidden border-2 transition-all', i === activeImg ? 'border-primary' : 'border-border hover:border-primary/40')}
                       >
-                        <Image src={img.url} alt="" width={64} height={64} className="object-cover w-full h-full" />
+                        <Image src={img.url} alt="" width={64} height={64} className="object-cover w-full h-full" placeholder="blur" blurDataURL={imgBlurDataURL} />
                       </button>
                     ))}
                   </div>
@@ -236,6 +285,41 @@ export default function ProductDetailPage() {
                   </div>
                 )}
               </div>
+
+              {/* Bundle items */}
+              {product.isBundle && product.bundleItems && product.bundleItems.length > 0 && (
+                <div className="bg-violet-50 rounded-2xl p-5 border border-violet-200">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-8 h-8 rounded-lg bg-violet-100 flex items-center justify-center">
+                      <Layers size={16} className="text-violet-600" />
+                    </div>
+                    <div>
+                      <h2 className="font-semibold text-violet-900">Contenu du lot</h2>
+                      {product.bundleDiscount && product.bundleDiscount > 0 && (
+                        <p className="text-xs text-violet-600 font-medium">-{product.bundleDiscount}% vs prix séparés</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    {product.bundleItems.map((item, i) => (
+                      <div key={i} className="flex items-center justify-between bg-white rounded-xl px-4 py-2.5 border border-violet-100">
+                        <div className="flex items-center gap-3">
+                          <span className="w-6 h-6 rounded-full bg-violet-100 text-violet-700 text-xs font-bold flex items-center justify-center shrink-0">
+                            {item.quantity}×
+                          </span>
+                          <span className="text-sm text-dark font-medium">{item.name}</span>
+                        </div>
+                        {item.unitPrice && item.unitPrice > 0 && (
+                          <span className="text-xs text-muted">{formatPrice(item.unitPrice)}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-violet-500 mt-3 text-center">
+                    Prix du lot : <span className="font-bold text-violet-700">{formatPrice(product.price)}</span>
+                  </p>
+                </div>
+              )}
 
               {/* Reviews */}
               <div className="bg-white rounded-2xl p-5 border border-border/50 shadow-card">
@@ -281,11 +365,11 @@ export default function ProductDetailPage() {
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex items-center gap-2">
                             <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center text-primary text-xs font-bold">
-                              {review.buyer?.profile?.firstName?.[0] || '?'}
+                              {review.giver?.firstName?.[0] || '?'}
                             </div>
                             <div>
                               <div className="text-sm font-medium text-dark">
-                                {review.buyer?.profile?.firstName} {review.buyer?.profile?.lastName?.[0]}.
+                                {review.giver?.firstName}.
                               </div>
                               <div className="flex items-center gap-1.5">
                                 {[1,2,3,4,5].map((s) => (
@@ -338,7 +422,7 @@ export default function ProductDetailPage() {
                 {/* Condition + views */}
                 <div className="flex items-center gap-2 mb-4">
                   <span className={cn('badge text-xs font-semibold px-2.5 py-1 rounded-lg', CONDITION_COLORS[product.condition] || 'bg-surface text-muted')}>
-                    {getConditionLabel(product.condition)}
+                    {getConditionLabel(product.condition).label}
                   </span>
                   <span className="flex items-center gap-1 text-xs text-muted">
                     <Eye size={12} /> {product.viewCount || 0} vues
@@ -401,21 +485,21 @@ export default function ProductDetailPage() {
                   <h3 className="font-semibold text-dark mb-3 text-sm">Vendeur</h3>
                   <div className="flex items-center gap-3 mb-3">
                     <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center text-primary font-bold text-lg flex-shrink-0">
-                      {product.seller.profile?.firstName?.[0] || <User size={20} />}
+                      {product.seller.firstName?.[0] || <User size={20} />}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
                         <span className="font-semibold text-dark text-sm truncate">
-                          {product.seller.sellerProfile?.shopName || `${product.seller.profile?.firstName} ${product.seller.profile?.lastName}`}
+                          {product.seller.sellerProfile?.shopName || `${product.seller.firstName} ${product.seller.lastName}`}
                         </span>
                         {product.seller.isKycVerified && (
-                          <Award size={14} className="text-blue-500 shrink-0" title="Vendeur KYC vérifié" />
+                          <Award size={14} className="text-blue-500 shrink-0" aria-label="Vendeur KYC vérifié" />
                         )}
                       </div>
                       <div className="flex items-center gap-1.5 mt-0.5">
                         <div className="flex">
                           {[1,2,3,4,5].map((s) => (
-                            <Star key={s} size={11} className={s <= Math.round(product.seller.sellerProfile?.rating || 0) ? 'fill-amber-400 text-amber-400' : 'text-border'} />
+                            <Star key={s} size={11} className={s <= Math.round(product.seller.sellerProfile?.avgRating || 0) ? 'fill-amber-400 text-amber-400' : 'text-border'} />
                           ))}
                         </div>
                         <span className="text-xs text-muted">({product.seller.sellerProfile?.totalReviews || 0})</span>
@@ -423,14 +507,14 @@ export default function ProductDetailPage() {
                     </div>
                   </div>
 
-                  {product.seller.sellerProfile?.bio && (
-                    <p className="text-xs text-muted mb-3 line-clamp-2">{product.seller.sellerProfile.bio}</p>
+                  {product.seller.sellerProfile?.shopDescription && (
+                    <p className="text-xs text-muted mb-3 line-clamp-2">{product.seller.sellerProfile.shopDescription}</p>
                   )}
 
-                  {product.seller.profile?.city && (
+                  {product.city && (
                     <div className="flex items-center gap-1.5 text-xs text-muted mb-3">
                       <MapPin size={12} />
-                      <span>{product.seller.profile.city}, {product.seller.profile.country || 'Togo'}</span>
+                      <span>{product.city}, {product.country || 'Togo'}</span>
                     </div>
                   )}
 
@@ -444,11 +528,11 @@ export default function ProductDetailPage() {
               )}
 
               {/* Location */}
-              {product.location && (
+              {product.city && (
                 <div className="bg-white rounded-2xl p-4 border border-border/50 shadow-card">
                   <div className="flex items-center gap-2 text-sm text-dark">
                     <MapPin size={16} className="text-primary" />
-                    <span>{product.location}</span>
+                    <span>{product.city}{product.country ? `, ${product.country}` : ''}</span>
                   </div>
                 </div>
               )}

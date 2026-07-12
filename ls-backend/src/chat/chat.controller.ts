@@ -42,6 +42,17 @@ export class ChatController {
     return this.chatService.getMessages(id, userId, page, limit);
   }
 
+  @Post('conversations/:id/messages')
+  @ApiOperation({ summary: 'Envoyer un message dans une conversation' })
+  async sendMessage(
+    @CurrentUser('id') userId: string,
+    @Param('id') convId: string,
+    @Body() body: { content: string; imageUrl?: string },
+  ) {
+    const message = await this.chatService.sendMessage(convId, userId, body.content, body.imageUrl);
+    return { message: 'Message envoyé', data: message };
+  }
+
   @Delete('messages/:id')
   @ApiOperation({ summary: 'Supprimer un message' })
   deleteMessage(@CurrentUser('id') userId: string, @Param('id') id: string) {

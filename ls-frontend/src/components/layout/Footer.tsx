@@ -1,7 +1,17 @@
+'use client'
 import Link from 'next/link'
-import { Facebook, Instagram, Twitter, Youtube, Mail, Phone, MapPin, Shield, Zap, Award } from 'lucide-react'
+import { useState } from 'react'
+import { Facebook, Instagram, Twitter, Youtube, Mail, Phone, MapPin, Shield, Zap, Award, Send } from 'lucide-react'
 
 export default function Footer() {
+  const [email, setEmail] = useState('')
+  const [subscribed, setSubscribed] = useState(false)
+
+  const handleNewsletter = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (email.trim()) { setSubscribed(true); setEmail('') }
+  }
+
   return (
     <footer className="bg-dark text-white">
       {/* Trust bar */}
@@ -10,9 +20,9 @@ export default function Footer() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             {[
               { icon: Shield, title: 'Paiement sécurisé', desc: 'Escrow LS protège chaque transaction' },
-              { icon: Zap, title: 'Mobile Money', desc: 'Wave, MTN MoMo, TMoney, Flooz' },
-              { icon: Award, title: 'Vendeurs vérifiés', desc: 'KYC et badges de confiance' },
-              { icon: Mail, title: 'Support 7j/7', desc: 'Réponse en moins de 24h' },
+              { icon: Zap,    title: 'Mobile Money',      desc: 'Wave · T-Money · Flooz · MTN' },
+              { icon: Award,  title: 'Vendeurs vérifiés', desc: 'KYC et badges de confiance' },
+              { icon: Mail,   title: 'Support 7j/7',      desc: 'Réponse en moins de 24h' },
             ].map(({ icon: Icon, title, desc }) => (
               <div key={title} className="flex items-start gap-3">
                 <div className="w-10 h-10 rounded-xl bg-primary/30 flex items-center justify-center shrink-0">
@@ -21,6 +31,13 @@ export default function Footer() {
                 <div>
                   <div className="font-semibold text-sm">{title}</div>
                   <div className="text-xs text-white/60 mt-0.5">{desc}</div>
+                  {title === 'Mobile Money' && (
+                    <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                      {['Wave', 'T-Money', 'Flooz', 'MTN', 'Orange'].map((m) => (
+                        <span key={m} className="text-[9px] font-bold bg-white/10 text-white/70 px-1.5 py-0.5 rounded-full border border-white/10">{m}</span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -51,6 +68,28 @@ export default function Footer() {
                   <Icon size={16} />
                 </a>
               ))}
+            </div>
+
+            {/* Newsletter */}
+            <div className="mt-5">
+              <p className="text-sm font-semibold text-white/80 mb-2">Recevoir les meilleures offres</p>
+              {subscribed ? (
+                <p className="text-xs text-success">✓ Vous êtes inscrit !</p>
+              ) : (
+                <form onSubmit={handleNewsletter} className="flex gap-2">
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="votre@email.com"
+                    required
+                    className="flex-1 bg-white/10 border border-white/20 rounded-xl px-3 py-2 text-xs text-white placeholder:text-white/40 focus:outline-none focus:border-accent min-w-0"
+                  />
+                  <button type="submit" className="p-2 bg-accent rounded-xl hover:bg-accent/80 transition-colors shrink-0">
+                    <Send size={14} className="text-white" />
+                  </button>
+                </form>
+              )}
             </div>
           </div>
 

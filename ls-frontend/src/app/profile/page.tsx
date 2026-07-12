@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '@/store/auth.store'
+import { Profile } from '@/types'
 import { initials, cn } from '@/lib/utils'
 import api from '@/lib/api'
 
@@ -50,18 +51,28 @@ const CURRENCIES = [{ value: 'XOF', label: 'FCFA (XOF)' }, { value: 'EUR', label
 
 export default function ProfilePage() {
   const router = useRouter()
-  const { user, isAuthenticated, updateUser, logout } = useAuthStore()
+  const { user, isAuthenticated, _hasHydrated, updateUser, logout } = useAuthStore()
   const [activeTab, setActiveTab] = useState('info')
+  const [notifPrefs, setNotifPrefs] = useState<Record<string, boolean>>({
+    orders: true,
+    messages: true,
+    reviews: true,
+    marketing: false,
+    security: true,
+    ...(user?.profile?.notificationPreferences ?? {}),
+  })
   const [showCurrentPass, setShowCurrentPass] = useState(false)
   const [showNewPass, setShowNewPass] = useState(false)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const [twoFAStep, setTwoFAStep] = useState<'idle' | 'setup' | 'disable'>('idle')
+  const [twoFAQrCode, setTwoFAQrCode] = useState('')
+  const [twoFAOtp, setTwoFAOtp] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const qc = useQueryClient()
 
-  if (!isAuthenticated) {
-    router.push('/auth/login')
-    return null
-  }
+  useEffect(() => {
+    if (_hasHydrated && !isAuthenticated) router.push('/auth/login')
+  }, [_hasHydrated, isAuthenticated, router])
 
   const { register: regProfile, handleSubmit: submitProfile, formState: { errors: profileErrors, isSubmitting: profileSubmitting } } = useForm<ProfileData>({
     resolver: zodResolver(profileSchema),
@@ -82,7 +93,7 @@ export default function ProfilePage() {
   })
 
   const updateProfileMutation = useMutation({
-    mutationFn: (data: ProfileData) => api.patch('/users/me/profile', data),
+    mutationFn: (data: ProfileData) => api.put('/users/me', data),
     onSuccess: (res) => {
       updateUser(res.data.data)
       toast.success('Profil mis à jour')
@@ -90,9 +101,53 @@ export default function ProfilePage() {
     onError: (err: any) => toast.error(err.response?.data?.message || 'Erreur lors de la mise à jour'),
   })
 
+  const notifMutation = useMutation({
+    mutationFn: (prefs: Record<string, boolean>) =>
+      api.put('/users/me', { notificationPreferences: prefs }),
+    onSuccess: () => toast.success('Préférences sauvegardées'),
+    onError: () => toast.error('Erreur lors de la sauvegarde'),
+  })
+
+  const handleNotifToggle = (key: string, value: boolean) => {
+    const updated = { ...notifPrefs, [key]: value }
+    setNotifPrefs(updated)
+    notifMutation.mutate(updated)
+  }
+
+  const setup2FAMutation = useMutation({
+    mutationFn: () => api.get('/auth/2fa/setup'),
+    onSuccess: (res) => {
+      setTwoFAQrCode(res.data.data.qrCode)
+      setTwoFAStep('setup')
+    },
+    onError: () => toast.error('Impossible de générer le QR code 2FA'),
+  })
+
+  const enable2FAMutation = useMutation({
+    mutationFn: () => api.post('/auth/2fa/enable', { otpCode: twoFAOtp }),
+    onSuccess: () => {
+      updateUser({ twoFactorEnabled: true })
+      toast.success('Authentification 2FA activée')
+      setTwoFAStep('idle')
+      setTwoFAOtp('')
+    },
+    onError: (err: any) => toast.error(err.response?.data?.message || 'Code invalide'),
+  })
+
+  const disable2FAMutation = useMutation({
+    mutationFn: () => api.post('/auth/2fa/disable', { otpCode: twoFAOtp }),
+    onSuccess: () => {
+      updateUser({ twoFactorEnabled: false })
+      toast.success('Authentification 2FA désactivée')
+      setTwoFAStep('idle')
+      setTwoFAOtp('')
+    },
+    onError: (err: any) => toast.error(err.response?.data?.message || 'Code invalide'),
+  })
+
   const changePasswordMutation = useMutation({
     mutationFn: (data: PasswordData) =>
-      api.patch('/auth/change-password', {
+      api.put('/users/me/password', {
         currentPassword: data.currentPassword,
         newPassword: data.newPassword,
       }),
@@ -102,6 +157,8 @@ export default function ProfilePage() {
     },
     onError: (err: any) => toast.error(err.response?.data?.message || 'Mot de passe actuel incorrect'),
   })
+
+  if (!_hasHydrated) return <div className="min-h-screen flex items-center justify-center"><Loader2 size={28} className="animate-spin text-primary" /></div>
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -116,12 +173,12 @@ export default function ProfilePage() {
       const form = new FormData()
       form.append('file', file)
       form.append('type', 'avatar')
-      const res = await api.post('/upload', form, {
+      const res = await api.post('/upload/image', form, {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
       const avatarUrl = res.data.data.url
-      await api.patch('/users/me/profile', { avatarUrl })
-      updateUser({ profile: { ...user?.profile, avatarUrl } as any })
+      await api.put('/users/me', { avatarUrl })
+      updateUser({ profile: { ...user?.profile, avatarUrl } as Profile })
       toast.success('Photo de profil mise à jour')
     } catch {
       toast.error('Erreur lors de l\'upload')
@@ -173,7 +230,7 @@ export default function ProfilePage() {
               <div className="flex items-center gap-2">
                 <h1 className="font-bold text-dark text-xl">{user?.firstName} {user?.lastName}</h1>
                 {user?.isKycVerified && (
-                  <Award size={16} className="text-blue-500" title="KYC vérifié" />
+                  <Award size={16} className="text-blue-500" aria-label="KYC vérifié" />
                 )}
               </div>
               <p className="text-muted text-sm">{user?.email}</p>
@@ -373,22 +430,87 @@ export default function ProfilePage() {
               <p className="text-muted text-sm mb-4">
                 Ajoutez une couche de sécurité supplémentaire à votre compte.
               </p>
-              <div className="flex items-center justify-between p-4 bg-surface rounded-xl border border-border">
-                <div className="flex items-center gap-3">
-                  <Shield size={20} className={user?.twoFactorEnabled ? 'text-success' : 'text-muted'} />
-                  <div>
-                    <p className="font-medium text-dark text-sm">
-                      {user?.twoFactorEnabled ? '2FA activé' : '2FA désactivé'}
-                    </p>
-                    <p className="text-xs text-muted">Application Authenticator (TOTP)</p>
+              <div className="p-4 bg-surface rounded-xl border border-border space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Shield size={20} className={user?.twoFactorEnabled ? 'text-success' : 'text-muted'} />
+                    <div>
+                      <p className="font-medium text-dark text-sm">
+                        {user?.twoFactorEnabled ? '2FA activé' : '2FA désactivé'}
+                      </p>
+                      <p className="text-xs text-muted">Application Authenticator (TOTP)</p>
+                    </div>
                   </div>
+                  {twoFAStep === 'idle' && (
+                    <button
+                      onClick={() => user?.twoFactorEnabled ? setTwoFAStep('disable') : setup2FAMutation.mutate()}
+                      disabled={setup2FAMutation.isPending}
+                      className={cn('btn-sm gap-1 flex items-center', user?.twoFactorEnabled ? 'btn-outline' : 'btn-primary')}
+                    >
+                      {setup2FAMutation.isPending && <Loader2 size={13} className="animate-spin" />}
+                      {user?.twoFactorEnabled ? 'Désactiver' : 'Activer'}
+                    </button>
+                  )}
                 </div>
-                <button
-                  onClick={() => toast('Gestion 2FA bientôt disponible', { icon: '🔐' })}
-                  className={cn('btn-sm', user?.twoFactorEnabled ? 'btn-outline' : 'btn-primary')}
-                >
-                  {user?.twoFactorEnabled ? 'Désactiver' : 'Activer'}
-                </button>
+
+                {/* Setup flow — scan QR code + entrer OTP */}
+                {twoFAStep === 'setup' && twoFAQrCode && (
+                  <div className="space-y-3">
+                    <p className="text-sm text-dark">Scannez ce QR code avec Google Authenticator ou Authy :</p>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={twoFAQrCode} alt="QR Code 2FA" className="w-40 h-40 rounded-xl border border-border" />
+                    <div>
+                      <label className="label text-xs">Code de vérification (6 chiffres)</label>
+                      <input
+                        value={twoFAOtp}
+                        onChange={(e) => setTwoFAOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        placeholder="123456"
+                        maxLength={6}
+                        className="input w-32 text-center font-mono tracking-widest"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => enable2FAMutation.mutate()}
+                        disabled={twoFAOtp.length !== 6 || enable2FAMutation.isPending}
+                        className="btn-primary btn-sm gap-1 flex items-center"
+                      >
+                        {enable2FAMutation.isPending && <Loader2 size={13} className="animate-spin" />}
+                        Confirmer l'activation
+                      </button>
+                      <button onClick={() => { setTwoFAStep('idle'); setTwoFAOtp('') }} className="btn-outline btn-sm">
+                        Annuler
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Disable flow — entrer OTP pour confirmer */}
+                {twoFAStep === 'disable' && (
+                  <div className="space-y-3">
+                    <p className="text-sm text-dark">Entrez le code de votre application pour désactiver la 2FA :</p>
+                    <input
+                      value={twoFAOtp}
+                      onChange={(e) => setTwoFAOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="123456"
+                      maxLength={6}
+                      className="input w-32 text-center font-mono tracking-widest"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => disable2FAMutation.mutate()}
+                        disabled={twoFAOtp.length !== 6 || disable2FAMutation.isPending}
+                        className="btn-sm border border-danger text-danger hover:bg-danger/10 rounded-xl px-4 py-2 text-sm font-medium flex items-center gap-1"
+                      >
+                        {disable2FAMutation.isPending && <Loader2 size={13} className="animate-spin" />}
+                        Désactiver la 2FA
+                      </button>
+                      <button onClick={() => { setTwoFAStep('idle'); setTwoFAOtp('') }} className="btn-outline btn-sm">
+                        Annuler
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </motion.div>
@@ -420,9 +542,9 @@ export default function ProfilePage() {
                   <label className="relative inline-flex items-center cursor-pointer">
                     <input
                       type="checkbox"
-                      defaultChecked={item.key !== 'marketing'}
+                      checked={notifPrefs[item.key] ?? item.key !== 'marketing'}
                       className="sr-only peer"
-                      onChange={() => toast('Préférences sauvegardées', { icon: '🔔' })}
+                      onChange={(e) => handleNotifToggle(item.key, e.target.checked)}
                     />
                     <div className="w-10 h-5 bg-border peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-5 peer-checked:bg-primary after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all" />
                   </label>

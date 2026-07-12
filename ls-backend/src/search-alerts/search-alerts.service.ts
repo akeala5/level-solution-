@@ -42,6 +42,25 @@ export class SearchAlertsService {
     return { message: 'Alerte supprimée' };
   }
 
+  // ─── ADMIN : Heatmap des requêtes de recherche ───────────────────────────────
+
+  async getSearchHeatmap() {
+    const alerts = await this.prisma.searchAlert.findMany({ select: { query: true } });
+
+    const counts: Record<string, number> = {};
+    for (const { query } of alerts) {
+      const key = query.toLowerCase().trim();
+      if (key.length > 1) counts[key] = (counts[key] ?? 0) + 1;
+    }
+
+    const heatmap = Object.entries(counts)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 60)
+      .map(([query, count]) => ({ query, count }));
+
+    return { data: heatmap };
+  }
+
   // ─── CRON : Vérifier les nouvelles annonces correspondant aux alertes ─────────
   async processAlerts() {
     const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000); // 24h ago

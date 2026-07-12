@@ -23,6 +23,13 @@ export class ProductsController {
   }
 
   @Public()
+  @Get('price-stats')
+  @ApiOperation({ summary: 'Stats prix médian par catégorie (Smart Pricing)' })
+  getPriceStats(@Query('categoryId') categoryId: string) {
+    return this.productsService.getPriceStats(categoryId);
+  }
+
+  @Public()
   @Get(':slug')
   @ApiOperation({ summary: 'Détail d\'une annonce' })
   findOne(@Param('slug') slug: string, @CurrentUser() user: any) {
@@ -37,10 +44,68 @@ export class ProductsController {
   }
 
   @ApiBearerAuth()
+  @Get(':id/edit')
+  @ApiOperation({ summary: 'Récupérer une annonce pour édition (vendeur)' })
+  getForEdit(@CurrentUser() user: any, @Param('id') id: string) {
+    return this.productsService.getForEdit(id, user.id);
+  }
+
+  @ApiBearerAuth()
   @Put(':id')
   @ApiOperation({ summary: 'Modifier une annonce' })
   update(@CurrentUser() user: any, @Param('id') id: string, @Body() dto: UpdateProductDto) {
     return this.productsService.update(id, user.id, dto);
+  }
+
+  @ApiBearerAuth()
+  @Patch(':id/flash')
+  @ApiOperation({ summary: 'Activer/désactiver une vente flash (heures = 0 pour désactiver)' })
+  setFlash(
+    @CurrentUser() user: any,
+    @Param('id') id: string,
+    @Body() body: { hours: number },
+  ) {
+    return this.productsService.setFlash(id, user.id, user.role, body);
+  }
+
+  @ApiBearerAuth()
+  @Patch(':id/bundle')
+  @ApiOperation({ summary: 'Configurer une vente en lot (bundle)' })
+  setBundle(
+    @CurrentUser() user: any,
+    @Param('id') id: string,
+    @Body() body: { isBundle: boolean; bundleItems?: { name: string; quantity: number; unitPrice?: number }[]; bundleDiscount?: number },
+  ) {
+    return this.productsService.setBundle(id, user.id, user.role, body);
+  }
+
+  @ApiBearerAuth()
+  @Patch(':id/status')
+  @ApiOperation({ summary: 'Changer le statut d\'une annonce (pause/activer)' })
+  updateStatus(
+    @CurrentUser() user: any,
+    @Param('id') id: string,
+    @Body() body: { status: string },
+  ) {
+    return this.productsService.updateProductStatus(id, user.id, user.role, body.status);
+  }
+
+  @ApiBearerAuth()
+  @Patch(':id')
+  @ApiOperation({ summary: 'Modifier une annonce (PATCH)' })
+  patch(@CurrentUser() user: any, @Param('id') id: string, @Body() dto: UpdateProductDto) {
+    return this.productsService.update(id, user.id, dto);
+  }
+
+  @ApiBearerAuth()
+  @Delete(':id/images/:imageId')
+  @ApiOperation({ summary: 'Supprimer une image d\'une annonce' })
+  deleteImage(
+    @CurrentUser() user: any,
+    @Param('id') id: string,
+    @Param('imageId') imageId: string,
+  ) {
+    return this.productsService.deleteProductImage(id, imageId, user.id);
   }
 
   @ApiBearerAuth()

@@ -306,6 +306,109 @@ export class UsersService {
     };
   }
 
+  // ─── ANALYTICS VENDEUR ────────────────────────────────────────────────────────
+
+  async getSellerAnalytics(userId: string, period: '7d' | '30d' | '90d') {
+    const days = period === '7d' ? 7 : period === '90d' ? 90 : 30;
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+
+    const PAID = ['PAYMENT_CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'COMPLETED'];
+
+    const [orders, allStats, topProducts] = await Promise.all([
+      this.prisma.order.findMany({
+        where: { sellerId: userId, createdAt: { gte: since } },
+        select: { id: true, status: true, sellerAmount: true, totalAmount: true, createdAt: true },
+      }),
+      this.prisma.product.aggregate({
+        where: { sellerId: userId },
+        _sum: { viewCount: true },
+      }),
+      this.prisma.product.findMany({
+        where: { sellerId: userId },
+        orderBy: { viewCount: 'desc' },
+        take: 5,
+        select: { id: true, title: true, viewCount: true, favoriteCount: true },
+      }),
+    ]);
+
+    // Revenue chart — initialiser tous les jours à 0
+    const revenueMap = new Map<string, { revenue: number; orders: number }>();
+    for (let i = 0; i < days; i++) {
+      const d = new Date();
+      d.setDate(d.getDate() - (days - 1 - i));
+      revenueMap.set(d.toISOString().slice(0, 10), { revenue: 0, orders: 0 });
+    }
+    for (const order of orders) {
+      const key = new Date(order.createdAt).toISOString().slice(0, 10);
+      if (revenueMap.has(key)) {
+        const entry = revenueMap.get(key)!;
+        if (PAID.includes(order.status)) entry.revenue += order.sellerAmount || order.totalAmount || 0;
+        entry.orders += 1;
+      }
+    }
+    const revenueChart = Array.from(revenueMap.entries()).map(([date, d]) => ({
+      date: date.slice(5).replace('-', '/'),
+      revenue: Math.round(d.revenue),
+      orders: d.orders,
+    }));
+
+    // Orders by status
+    const statusMap = new Map<string, number>();
+    for (const o of orders) statusMap.set(o.status, (statusMap.get(o.status) || 0) + 1);
+    const STATUS_LABELS: Record<string, string> = {
+      PENDING: 'En attente', PAYMENT_CONFIRMED: 'Confirmé', PROCESSING: 'Préparation',
+      SHIPPED: 'Expédié', DELIVERED: 'Livré', COMPLETED: 'Terminé',
+      CANCELLED: 'Annulé', DISPUTED: 'Litige',
+    };
+    const ordersByStatus = Array.from(statusMap.entries())
+      .map(([status, count]) => ({ status, label: STATUS_LABELS[status] || status, count }))
+      .sort((a, b) => b.count - a.count);
+
+    // Top products avec comptage commandes
+    const productIds = topProducts.map(p => p.id);
+    const orderCounts = await this.prisma.orderItem.groupBy({
+      by: ['productId'],
+      where: { productId: { in: productIds } },
+      _count: { productId: true },
+    });
+    const orderCountMap = new Map(orderCounts.map(o => [o.productId, o._count.productId]));
+    const topProductsData = topProducts.map(p => {
+      const sold = orderCountMap.get(p.id) || 0;
+      return {
+        title: p.title.length > 30 ? p.title.slice(0, 30) + '…' : p.title,
+        viewCount: p.viewCount,
+        orderCount: sold,
+        favoriteCount: p.favoriteCount,
+        conversion: p.viewCount > 0 ? parseFloat(((sold / p.viewCount) * 100).toFixed(1)) : 0,
+      };
+    });
+
+    // Résumé
+    const paidOrders = orders.filter(o => PAID.includes(o.status));
+    const totalRevenue = paidOrders.reduce((s, o) => s + (o.sellerAmount || o.totalAmount || 0), 0);
+    const totalViews = allStats._sum.viewCount || 0;
+    const conversionRate = totalViews > 0
+      ? parseFloat(((paidOrders.length / totalViews) * 100).toFixed(2))
+      : 0;
+
+    return {
+      message: 'Analytiques vendeur',
+      data: {
+        period,
+        revenueChart,
+        ordersByStatus,
+        topProducts: topProductsData,
+        summary: {
+          totalRevenue: Math.round(totalRevenue),
+          totalOrders: paidOrders.length,
+          totalViews,
+          conversionRate,
+        },
+      },
+    };
+  }
+
   // ─── KYC ─────────────────────────────────────────────────────────────────────
 
   async submitKyc(userId: string, data: { documentType: string; frontUrl: string; backUrl?: string; selfieUrl?: string }) {

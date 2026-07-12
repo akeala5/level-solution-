@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -8,7 +8,7 @@ import { motion } from 'framer-motion'
 import {
   ShoppingBag, Heart, MessageSquare, Star, Package,
   ChevronRight, Loader2, Clock, CheckCircle, Truck,
-  XCircle, AlertCircle, Eye, User, Award
+  XCircle, AlertCircle, Eye, User, Award, Users
 } from 'lucide-react'
 import { useAuthStore } from '@/store/auth.store'
 import { formatPrice, timeAgo, getStatusLabel, cn } from '@/lib/utils'
@@ -44,32 +44,33 @@ const TABS = [
 
 export default function BuyerDashboardPage() {
   const router = useRouter()
-  const { user, isAuthenticated } = useAuthStore()
+  const { user, isAuthenticated, _hasHydrated } = useAuthStore()
   const [activeTab, setActiveTab] = useState('orders')
   const [orderFilter, setOrderFilter] = useState('')
 
-  if (!isAuthenticated) {
-    router.push('/auth/login')
-    return null
-  }
+  useEffect(() => {
+    if (_hasHydrated && !isAuthenticated) router.push('/auth/login')
+  }, [_hasHydrated, isAuthenticated, router])
 
   const { data: ordersData, isLoading: ordersLoading } = useQuery({
     queryKey: ['my-orders'],
-    queryFn: () => api.get('/orders/my').then((r) => r.data.data),
-    enabled: activeTab === 'orders',
+    queryFn: () => api.get('/orders/buying').then((r) => r.data.data),
+    enabled: isAuthenticated && activeTab === 'orders',
   })
 
   const { data: favData, isLoading: favLoading } = useQuery({
     queryKey: ['my-favorites'],
     queryFn: () => api.get('/users/me/favorites').then((r) => r.data.data),
-    enabled: activeTab === 'favorites',
+    enabled: isAuthenticated && activeTab === 'favorites',
   })
 
   const { data: reviewsData, isLoading: reviewsLoading } = useQuery({
     queryKey: ['my-reviews'],
-    queryFn: () => api.get('/reviews/my').then((r) => r.data.data),
-    enabled: activeTab === 'reviews',
+    queryFn: () => api.get('/reviews/my').then((r) => r.data.data as any[]),
+    enabled: isAuthenticated && activeTab === 'reviews',
   })
+
+  if (!_hasHydrated) return <div className="min-h-screen flex items-center justify-center"><Loader2 size={28} className="animate-spin text-primary" /></div>
 
   const orders = ordersData?.orders || ordersData || []
   const filteredOrders = orderFilter
@@ -92,9 +93,14 @@ export default function BuyerDashboardPage() {
             <h1 className="heading-sm text-dark">Bonjour, {user?.firstName} 👋</h1>
             <p className="text-muted text-sm">Gérez vos achats et votre activité</p>
           </div>
-          <Link href="/profile" className="flex items-center gap-2 btn-outline btn-sm">
-            <User size={15} /> Mon profil
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link href="/dashboard/referrals" className="flex items-center gap-2 btn-outline btn-sm text-indigo-600 border-indigo-200 hover:bg-indigo-50">
+              <Users size={15} /> Parrainage
+            </Link>
+            <Link href="/profile" className="flex items-center gap-2 btn-outline btn-sm">
+              <User size={15} /> Mon profil
+            </Link>
+          </div>
         </div>
 
         {/* Stats */}
@@ -133,18 +139,31 @@ export default function BuyerDashboardPage() {
           <div>
             {/* Filter */}
             <div className="flex flex-wrap gap-2 mb-4">
-              {['', 'PENDING', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'COMPLETED', 'CANCELLED'].map((status) => (
+              {[
+                { key: '',                 label: 'Toutes' },
+                { key: 'PENDING',          label: 'En attente' },
+                { key: 'PROCESSING',       label: 'En préparation' },
+                { key: 'SHIPPED',          label: 'Expédié' },
+                { key: 'DELIVERED',        label: 'Livré' },
+                { key: 'COMPLETED',        label: 'Terminé' },
+                { key: 'CANCELLED',        label: 'Annulé' },
+                { key: 'DISPUTED',         label: 'Litige' },
+              ].map(({ key, label }) => (
                 <button
-                  key={status}
-                  onClick={() => setOrderFilter(status)}
+                  key={key}
+                  onClick={() => setOrderFilter(key)}
                   className={cn(
                     'text-xs px-3 py-1.5 rounded-full border transition-all',
-                    orderFilter === status
-                      ? 'bg-primary text-white border-primary'
-                      : 'border-border text-muted hover:border-primary/40 hover:text-dark'
+                    orderFilter === key
+                      ? key === 'DISPUTED'
+                        ? 'bg-orange-500 text-white border-orange-500'
+                        : 'bg-primary text-white border-primary'
+                      : key === 'DISPUTED'
+                        ? 'border-orange-200 text-orange-600 hover:border-orange-400'
+                        : 'border-border text-muted hover:border-primary/40 hover:text-dark'
                   )}
                 >
-                  {status === '' ? 'Toutes' : getStatusLabel(status).label}
+                  {label}
                 </button>
               ))}
             </div>

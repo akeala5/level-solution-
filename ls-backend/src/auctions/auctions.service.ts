@@ -188,14 +188,14 @@ export class AuctionsService {
     if (hasWinner) {
       await this.notifications.createNotification({
         userId: topBid.bidderId,
-        type: 'ORDER_UPDATE',
+        type: 'AUCTION_WON',
         title: 'Vous avez remporté l\'enchère !',
         body: `Félicitations ! Vous avez remporté "${auction.product.title}" pour ${topBid.amount} FCFA`,
         data: { auctionId },
       });
       await this.notifications.createNotification({
         userId: auction.product.sellerId,
-        type: 'ORDER_UPDATE',
+        type: 'PRODUCT_SOLD',
         title: 'Enchère terminée',
         body: `Votre enchère pour "${auction.product.title}" s'est terminée à ${topBid.amount} FCFA`,
         data: { auctionId },

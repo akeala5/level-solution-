@@ -56,6 +56,6 @@ export const useCartStore = create<CartState>()(
           0
         ),
     }),
-    { name: 'ls-cart' }
+    { name: 'ls-cart', skipHydration: true }
   )
 )

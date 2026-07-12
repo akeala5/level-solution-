@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { WebhooksService } from '../webhooks/webhooks.service';
 import { getPaginationParams, paginate } from '../common/utils/pagination.util';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -14,6 +15,7 @@ export class OrdersService {
   constructor(
     private prisma: PrismaService,
     private notifications: NotificationsService,
+    private webhooks: WebhooksService,
   ) {}
 
   private generateOrderNumber(): string {
@@ -99,6 +101,13 @@ export class OrdersService {
 
       return newOrder;
     });
+
+    this.webhooks.dispatch(product.sellerId, 'order.created', {
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      totalAmount: order.totalAmount,
+      sellerAmount: order.sellerAmount,
+    }).catch(() => null);
 
     return { message: 'Commande créée', data: order };
   }
@@ -195,6 +204,25 @@ export class OrdersService {
     if (status === 'COMPLETED') {
       // Libérer l'escrow et créditer le vendeur
       await this.releaseEscrow(orderId);
+    }
+
+    // Dispatch webhook vendeur
+    const webhookEventMap: Record<string, string> = {
+      PAYMENT_CONFIRMED: 'order.paid',
+      SHIPPED: 'order.shipped',
+      DELIVERED: 'order.delivered',
+      COMPLETED: 'order.completed',
+      CANCELLED: 'order.cancelled',
+    };
+    const webhookEvent = webhookEventMap[status];
+    if (webhookEvent) {
+      this.webhooks.dispatch(order.sellerId, webhookEvent, {
+        orderId: updated.id,
+        orderNumber: updated.orderNumber,
+        status,
+        totalAmount: updated.totalAmount,
+        sellerAmount: updated.sellerAmount,
+      }).catch(() => null);
     }
 
     return { message: 'Statut mis à jour', data: updated };

@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -14,15 +14,16 @@ import { Conversation, Message } from '@/types'
 import { cn, timeAgo, initials } from '@/lib/utils'
 import api from '@/lib/api'
 import Cookies from 'js-cookie'
+import toast from 'react-hot-toast'
 
 let socket: Socket | null = null
 
-export default function ChatPage() {
+function ChatContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const sellerId = searchParams.get('seller')
   const productId = searchParams.get('product')
-  const { user, isAuthenticated } = useAuthStore()
+  const { user, isAuthenticated, _hasHydrated } = useAuthStore()
   const qc = useQueryClient()
 
   const [activeConvId, setActiveConvId] = useState<string | null>(null)
@@ -34,22 +35,23 @@ export default function ChatPage() {
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (_hasHydrated && !isAuthenticated) {
       router.push('/auth/login?redirect=/chat')
     }
-  }, [isAuthenticated, router])
+  }, [_hasHydrated, isAuthenticated, router])
 
   // Init socket
   useEffect(() => {
     const token = Cookies.get('accessToken')
     if (!token) return
 
-    socket = io(process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:3001', {
+    const wsBase = process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:3001'
+    socket = io(`${wsBase}/chat`, {
       auth: { token },
       transports: ['websocket'],
     })
 
-    socket.on('newMessage', (msg: Message) => {
+    socket.on('new_message', (msg: Message) => {
       setMessages((prev) => {
         if (prev.find((m) => m.id === msg.id)) return prev
         return [...prev, msg]
@@ -73,7 +75,7 @@ export default function ChatPage() {
     queryKey: ['conversations'],
     queryFn: () => api.get('/chat/conversations').then((r) => r.data.data as Conversation[]),
     enabled: isAuthenticated,
-    refetchInterval: 10000,
+    refetchInterval: 60000,
   })
 
   // Start or open conversation with seller
@@ -82,14 +84,15 @@ export default function ChatPage() {
     const start = async () => {
       try {
         const res = await api.post('/chat/conversations', {
-          recipientId: sellerId,
+          otherUserId: sellerId,
           productId: productId || undefined,
         })
         const conv = res.data.data
         setActiveConvId(conv.id)
         qc.invalidateQueries({ queryKey: ['conversations'] })
-      } catch (err) {
+      } catch (err: any) {
         console.error('Error starting conversation', err)
+        toast.error(err.response?.data?.message || 'Impossible de démarrer la conversation')
       }
     }
     start()
@@ -102,11 +105,11 @@ export default function ChatPage() {
       try {
         const res = await api.get(`/chat/conversations/${activeConvId}/messages`)
         setMessages(res.data.data as Message[])
-        socket?.emit('joinConversation', activeConvId)
-        // Mark as read
-        api.patch(`/chat/conversations/${activeConvId}/read`).catch(() => {})
-      } catch (err) {
+        // joining also marks as read (handled server-side)
+        socket?.emit('join_conversation', { conversationId: activeConvId })
+      } catch (err: any) {
         console.error('Error loading messages', err)
+        toast.error(err.response?.data?.message || 'Impossible de charger les messages')
       }
     }
     load()
@@ -114,7 +117,7 @@ export default function ChatPage() {
 
   const handleSelectConv = (conv: Conversation) => {
     setActiveConvId(conv.id)
-    socket?.emit('joinConversation', conv.id)
+    socket?.emit('join_conversation', { conversationId: conv.id })
   }
 
   const handleSend = async () => {
@@ -157,6 +160,8 @@ export default function ChatPage() {
 
   const activeConv = conversations.find((c) => c.id === activeConvId)
   const otherUser = activeConv?.members?.find((m) => m.userId !== user?.id)?.user
+
+  if (!_hasHydrated) return <div className="min-h-screen flex items-center justify-center"><Loader2 size={28} className="animate-spin text-primary" /></div>
 
   return (
     <div className="h-[calc(100vh-64px)] bg-surface flex">
@@ -325,4 +330,8 @@ export default function ChatPage() {
       </div>
     </div>
   )
+}
+
+export default function ChatPage() {
+  return <Suspense><ChatContent /></Suspense>
 }

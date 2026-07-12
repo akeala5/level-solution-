@@ -1,14 +1,30 @@
 'use client'
 import Link from 'next/link'
 import Image from 'next/image'
-import { Heart, Star, MapPin, Shield, Zap, Package, Eye } from 'lucide-react'
+import { Heart, Star, MapPin, Shield, Zap, Package, Eye, ShoppingCart, MessageSquare, Truck, RefreshCw, BadgeCheck, GitCompare, Flame, Clock, Layers } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { Product } from '@/types'
-import { cn, formatPrice, getConditionLabel, timeAgo } from '@/lib/utils'
+import { cn, formatPrice, getConditionLabel, timeAgo, imgBlurDataURL } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth.store'
+import { useCartStore } from '@/store/cart.store'
+import { useCompareStore } from '@/store/compare.store'
+import { useCountdown } from '@/hooks/useCountdown'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
 import { useState } from 'react'
+
+function FlashBadge({ flashEndsAt }: { flashEndsAt: string }) {
+  const { formatted, isExpired, urgency } = useCountdown(flashEndsAt)
+  if (isExpired) return null
+  return (
+    <span className={cn(
+      'inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full border font-bold',
+      urgency === 'critical' ? 'bg-red-500 text-white border-red-500 animate-pulse' : 'bg-red-50 text-red-700 border-red-200'
+    )}>
+      <Flame size={8} /> FLASH <Clock size={7} /> {formatted}
+    </span>
+  )
+}
 
 interface Props {
   product: Product
@@ -17,8 +33,37 @@ interface Props {
 
 export default function ProductCard({ product, onFavoriteToggle }: Props) {
   const { isAuthenticated } = useAuthStore()
+  const { addItem } = useCartStore()
+  const { addItem: addToCompare, removeItem: removeFromCompare, isInCompare, items: compareItems } = useCompareStore()
   const [isFav, setIsFav] = useState(product.isFavorite || false)
   const [loadingFav, setLoadingFav] = useState(false)
+
+  const inCompare = isInCompare(product.id)
+  const compareDisabled = !inCompare && compareItems.length >= 4
+
+  const handleCompare = (e: React.MouseEvent) => {
+    e.preventDefault()
+    if (inCompare) { removeFromCompare(product.id); return }
+    if (compareDisabled) { toast('Maximum 4 produits comparables', { icon: '⚠️' }); return }
+    addToCompare(product)
+  }
+
+  const handleAddToCart = (e: React.MouseEvent) => {
+    e.preventDefault()
+    addItem({
+      productId: product.id,
+      title: product.title,
+      price: product.price,
+      quantity: 1,
+      imageUrl: product.images?.[0]?.url,
+      hasDelivery: product.hasDelivery || false,
+      deliveryPrice: product.deliveryPrice,
+      sellerId: product.seller?.id || '',
+      sellerName: product.seller?.sellerProfile?.shopName || product.seller?.firstName || '',
+    })
+    toast.success('Ajouté au panier')
+  }
+
   const condition = getConditionLabel(product.condition)
   const image = product.images?.[0]?.url || product.images?.[0]?.thumbnailUrl
 
@@ -43,143 +88,184 @@ export default function ProductCard({ product, onFavoriteToggle }: Props) {
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 16 }}
+      initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
+      transition={{ duration: 0.25 }}
+      className="group"
     >
-      <Link href={`/products/${product.slug}`} className="card-hover group block">
-        {/* Image */}
-        <div className="relative aspect-[4/3] bg-surface overflow-hidden">
+      <Link
+        href={`/products/${product.slug}`}
+        className="block bg-white rounded-2xl shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden border border-slate-100 hover:border-indigo-100"
+      >
+        {/* ── Image 100% propre — aucun élément flottant ── */}
+        <div className="relative aspect-[4/3] bg-slate-50 overflow-hidden">
           {image ? (
             <Image
               src={image}
               alt={product.title}
               fill
-              className="product-img"
+              className="object-cover transition-transform duration-300 group-hover:scale-105"
               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+              placeholder="blur"
+              blurDataURL={imgBlurDataURL}
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center">
-              <Package size={48} className="text-border" />
+              <Package size={36} className="text-slate-300" />
             </div>
           )}
 
-          {/* Badges top left */}
-          <div className="absolute top-2 left-2 flex flex-col gap-1.5">
-            {product.isFeatured && (
-              <span className="badge bg-accent text-white text-[10px] px-2 py-0.5">
-                <Zap size={9} className="mr-0.5" /> Mis en avant
-              </span>
-            )}
-            {product.isReconditioned && (
-              <span className="badge bg-primary text-white text-[10px] px-2 py-0.5">
-                <Shield size={9} className="mr-0.5" /> Reconditionné LS
-              </span>
-            )}
-            {discount && (
-              <span className="badge bg-danger text-white text-[10px] px-2 py-0.5">
-                -{discount}%
-              </span>
-            )}
-          </div>
-
-          {/* Condition badge */}
-          <div className="absolute top-2 right-10">
-            <span className={cn('badge text-[10px] px-2 py-0.5', `badge-${condition.color}`)}>
-              {condition.label}
-            </span>
-          </div>
-
-          {/* Favorite button */}
-          <button
-            onClick={handleFavorite}
-            disabled={loadingFav}
-            className={cn(
-              'absolute top-2 right-2 w-8 h-8 rounded-full flex items-center justify-center transition-all',
-              isFav
-                ? 'bg-red-50 text-danger shadow-sm'
-                : 'bg-white/80 text-muted hover:bg-white hover:text-danger shadow-sm'
-            )}
-          >
-            <Heart size={15} fill={isFav ? 'currentColor' : 'none'} />
-          </button>
-
-          {/* Overlay stats */}
-          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/40 to-transparent p-2 opacity-0 group-hover:opacity-100 transition-opacity">
-            <div className="flex items-center gap-2 text-white text-xs">
-              <Eye size={12} />
-              <span>{product.viewCount} vues</span>
-              <Heart size={12} className="ml-auto" />
-              <span>{product.favoriteCount}</span>
+          {/* Hover actions — slide up depuis le bas de l'image */}
+          <div className="absolute inset-x-0 bottom-0 p-2 translate-y-full group-hover:translate-y-0 transition-transform duration-200 ease-out bg-gradient-to-t from-black/50 to-transparent pt-6">
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={handleAddToCart}
+                className="flex-1 flex items-center justify-center gap-1.5 bg-white text-slate-800 text-xs font-semibold py-1.5 rounded-xl hover:bg-indigo-600 hover:text-white transition-colors shadow-sm"
+              >
+                <ShoppingCart size={11} /> Ajouter
+              </button>
+              <Link
+                href={`/chat?seller=${product.seller?.id}&product=${product.id}`}
+                onClick={(e) => e.stopPropagation()}
+                className="flex items-center justify-center bg-white/25 backdrop-blur-sm text-white text-xs px-2.5 py-1.5 rounded-xl hover:bg-white/40 transition-colors border border-white/30"
+              >
+                <MessageSquare size={11} />
+              </Link>
+              <div className="ml-auto flex items-center gap-1 text-white/80 text-[10px] bg-black/30 backdrop-blur-sm rounded-md px-1.5 py-0.5">
+                <Eye size={9} /> {product.viewCount || 0}
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Content */}
-        <div className="p-3">
-          {/* Category */}
-          <div className="text-xs text-muted mb-1 truncate">{product.category?.name}</div>
+        {/* ── Contenu ── */}
+        <div className="p-3.5">
 
-          {/* Title */}
-          <h3 className="text-sm font-semibold text-dark leading-snug line-clamp-2 mb-2 group-hover:text-primary transition-colors">
+          {/* Ligne badges + favori (hors image, aucun risque de chevauchement) */}
+          <div className="flex items-center gap-1 flex-wrap mb-2">
+            {/* Badges produit */}
+            {product.isFeatured && (
+              <span className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full border font-medium bg-amber-50 text-amber-700 border-amber-200">
+                <Zap size={8} /> Sponsorisé
+              </span>
+            )}
+            {product.isReconditioned && (
+              <span className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full border font-medium bg-indigo-50 text-indigo-700 border-indigo-200">
+                <RefreshCw size={8} /> Reconditionné
+              </span>
+            )}
+            {product.isFlash && product.flashEndsAt && (
+              <FlashBadge flashEndsAt={product.flashEndsAt} />
+            )}
+            {product.isBundle && (
+              <span className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full border font-medium bg-violet-50 text-violet-700 border-violet-200">
+                <Layers size={8} /> Lot
+              </span>
+            )}
+            {product.seller?.isKycVerified && (
+              <span className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full border font-medium bg-emerald-50 text-emerald-700 border-emerald-200">
+                <BadgeCheck size={8} /> Vérifié
+              </span>
+            )}
+            {discount && (
+              <span className="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full border font-bold bg-rose-50 text-rose-700 border-rose-200">
+                -{discount}%
+              </span>
+            )}
+
+            {/* Condition + favori poussés à droite */}
+            <div className="ml-auto flex items-center gap-1.5 shrink-0">
+              <span className={cn('text-[10px] px-1.5 py-0.5 rounded-full border font-medium', `badge-${condition.color}`)}>
+                {condition.label}
+              </span>
+              <button
+                onClick={handleCompare}
+                title={inCompare ? 'Retirer de la comparaison' : 'Ajouter à la comparaison'}
+                className={cn(
+                  'w-6 h-6 rounded-full flex items-center justify-center transition-all border',
+                  inCompare
+                    ? 'bg-primary/10 text-primary border-primary/30'
+                    : compareDisabled
+                    ? 'bg-slate-50 text-slate-300 border-slate-200 cursor-not-allowed'
+                    : 'bg-slate-50 text-slate-400 border-slate-200 hover:bg-primary/10 hover:text-primary hover:border-primary/30'
+                )}
+              >
+                <GitCompare size={10} />
+              </button>
+              <button
+                onClick={handleFavorite}
+                disabled={loadingFav}
+                className={cn(
+                  'w-6 h-6 rounded-full flex items-center justify-center transition-all border',
+                  isFav
+                    ? 'bg-rose-50 text-rose-500 border-rose-200'
+                    : 'bg-slate-50 text-slate-400 border-slate-200 hover:bg-rose-50 hover:text-rose-400 hover:border-rose-200'
+                )}
+              >
+                <Heart size={11} fill={isFav ? 'currentColor' : 'none'} />
+              </button>
+            </div>
+          </div>
+
+          {/* Titre */}
+          <h3 className="text-sm font-semibold text-slate-800 leading-snug line-clamp-2 mb-2 group-hover:text-indigo-600 transition-colors">
             {product.title}
           </h3>
 
-          {/* Price */}
-          <div className="flex items-baseline gap-2 mb-2">
-            <span className="text-lg font-bold text-primary">
+          {/* Prix */}
+          <div className="flex items-baseline gap-2 mb-2.5">
+            <span className="text-base font-bold text-indigo-600">
               {formatPrice(product.price)}
             </span>
             {product.originalPrice && (
-              <span className="text-xs text-muted line-through">
+              <span className="text-xs text-slate-400 line-through">
                 {formatPrice(product.originalPrice)}
               </span>
             )}
             {product.isNegotiable && (
-              <span className="text-[10px] text-accent font-medium">Négociable</span>
+              <span className="ml-auto text-[10px] text-amber-600 font-semibold bg-amber-50 px-1.5 py-0.5 rounded-full border border-amber-100">
+                Négo.
+              </span>
             )}
           </div>
 
-          {/* Seller info */}
-          <div className="flex items-center justify-between text-xs text-muted">
+          {/* Divider */}
+          <div className="h-px bg-slate-100 mb-2" />
+
+          {/* Vendeur */}
+          <div className="flex items-center justify-between text-[11px] text-slate-500">
             <div className="flex items-center gap-1.5 min-w-0">
-              <div className="w-4 h-4 rounded-full bg-primary-100 flex items-center justify-center text-primary font-bold text-[9px] shrink-0">
-                {product.seller?.firstName?.[0]}
+              <div className="w-5 h-5 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-[9px] shrink-0">
+                {product.seller?.firstName?.[0]?.toUpperCase()}
               </div>
-              <span className="truncate">
+              <span className="truncate font-medium text-slate-600">
                 {product.seller?.sellerProfile?.shopName || product.seller?.firstName}
               </span>
               {product.seller?.isKycVerified && (
-                <Shield size={10} className="text-success shrink-0" />
+                <span title="Vendeur KYC vérifié" className="shrink-0">
+                  <BadgeCheck size={11} className="text-emerald-500" />
+                </span>
               )}
             </div>
-            <div className="flex items-center gap-1 shrink-0">
-              {product.seller?.sellerProfile?.avgRating ? (
-                <>
-                  <Star size={10} fill="currentColor" className="text-warning" />
-                  <span>{product.seller.sellerProfile.avgRating.toFixed(1)}</span>
-                </>
-              ) : null}
-            </div>
+            {product.seller?.sellerProfile?.avgRating ? (
+              <span className="flex items-center gap-0.5 shrink-0">
+                <Star size={9} fill="currentColor" className="text-amber-400" />
+                {product.seller.sellerProfile.avgRating.toFixed(1)}
+              </span>
+            ) : null}
           </div>
 
-          {/* Location & delivery */}
-          <div className="flex items-center justify-between mt-1.5 text-[11px] text-muted">
+          {/* Ville + livraison */}
+          <div className="flex items-center justify-between mt-1.5 text-[10px] text-slate-400">
             {product.city && (
-              <span className="flex items-center gap-1">
-                <MapPin size={10} />
-                {product.city}
-              </span>
+              <span className="flex items-center gap-1"><MapPin size={9} />{product.city}</span>
             )}
             {product.hasDelivery && (
-              <span className="text-success font-medium">Livraison dispo</span>
+              <span className="flex items-center gap-1 text-emerald-600 font-medium"><Truck size={9} />Livraison</span>
             )}
           </div>
 
-          {/* Time */}
-          <div className="text-[10px] text-muted/70 mt-1.5 text-right">
-            {timeAgo(product.createdAt)}
-          </div>
+          <p className="text-[10px] text-slate-300 mt-1 text-right">{timeAgo(product.createdAt)}</p>
         </div>
       </Link>
     </motion.div>

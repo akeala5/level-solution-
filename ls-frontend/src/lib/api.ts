@@ -6,7 +6,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1
 export const api = axios.create({
   baseURL: API_URL,
   headers: { 'Content-Type': 'application/json' },
-  timeout: 15000,
+  timeout: 10000,
 })
 
 // Inject token
@@ -35,7 +35,9 @@ api.interceptors.response.use(
       } catch {
         Cookies.remove('accessToken')
         Cookies.remove('refreshToken')
-        if (typeof window !== 'undefined') window.location.href = '/auth/login'
+        if (typeof window !== 'undefined') {
+          window.location.href = '/auth/login'
+        }
       }
     }
     return Promise.reject(error)

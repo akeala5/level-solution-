@@ -2,7 +2,7 @@ import {
   Controller, Get, Put, Post, Delete, Patch, Body, Param,
   Query, ParseIntPipe, DefaultValuePipe, UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -48,6 +48,16 @@ export class UsersController {
   @ApiOperation({ summary: 'Dashboard vendeur' })
   getSellerDashboard(@CurrentUser('id') userId: string) {
     return this.usersService.getSellerDashboard(userId);
+  }
+
+  @Get('me/analytics')
+  @ApiOperation({ summary: 'Analytiques vendeur (revenus, commandes, top produits, conversion)' })
+  @ApiQuery({ name: 'period', enum: ['7d', '30d', '90d'], required: false })
+  getSellerAnalytics(
+    @CurrentUser('id') userId: string,
+    @Query('period') period: '7d' | '30d' | '90d' = '30d',
+  ) {
+    return this.usersService.getSellerAnalytics(userId, period || '30d');
   }
 
   @Get('me/favorites')

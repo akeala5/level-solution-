@@ -50,6 +50,25 @@ export class OrdersController {
     return this.ordersService.getOrderById(id, user.id, user.role);
   }
 
+  @Patch(':id/cancel')
+  @ApiOperation({ summary: 'Annuler une commande (acheteur)' })
+  cancelOrder(
+    @CurrentUser() user: any,
+    @Param('id') id: string,
+    @Body() body: { reason?: string },
+  ) {
+    return this.ordersService.updateStatus(id, user.id, user.role, 'CANCELLED', body);
+  }
+
+  @Patch(':id/confirm-delivery')
+  @ApiOperation({ summary: 'Confirmer la réception (acheteur)' })
+  confirmDelivery(
+    @CurrentUser() user: any,
+    @Param('id') id: string,
+  ) {
+    return this.ordersService.updateStatus(id, user.id, user.role, 'DELIVERED', {});
+  }
+
   @Patch(':id/status')
   @ApiOperation({ summary: 'Mettre à jour le statut d\'une commande' })
   updateStatus(

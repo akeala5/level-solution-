@@ -1,7 +1,7 @@
 // PM2 — LS Marketplace Production
 // Usage : pm2 start ecosystem.config.js --env production
 
-const APP_ROOT = '/var/www/ls-marketplace';
+const APP_ROOT = '/var/www/shopls-pro';
 
 module.exports = {
   apps: [
@@ -9,7 +9,7 @@ module.exports = {
     {
       name: 'ls-backend',
       cwd: `${APP_ROOT}/ls-backend`,
-      script: 'dist/main.js',
+      script: 'dist/src/main.js',
       interpreter: 'node',
       instances: 2,
       exec_mode: 'cluster',
@@ -25,15 +25,17 @@ module.exports = {
       log_date_format: 'YYYY-MM-DD HH:mm:ss',
     },
 
-    // ─── FRONTEND NEXT.JS ──────────────────────────────────────────────────────
+    // ─── FRONTEND NEXT.JS (standalone output) ─────────────────────────────────
     {
       name: 'ls-frontend',
       cwd: `${APP_ROOT}/ls-frontend`,
-      script: 'node_modules/.bin/next',
-      args: 'start',
+      script: '.next/standalone/server.js',
       interpreter: 'node',
       instances: 1,
+      exec_mode: 'fork',       // standalone Next.js ne supporte pas cluster
+      max_memory_restart: '512M',
       watch: false,
+      node_args: '--max-old-space-size=460',
       env_production: {
         NODE_ENV: 'production',
         PORT: 3000,

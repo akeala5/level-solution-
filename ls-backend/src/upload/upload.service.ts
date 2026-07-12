@@ -13,12 +13,13 @@ export class UploadService {
 
   constructor(private configService: ConfigService) {
     this.s3 = new S3Client({
-      region: configService.get('s3.region'),
+      region: configService.get('s3.region') || 'auto',
       endpoint: configService.get('s3.endpoint'),
       credentials: {
         accessKeyId: configService.get('s3.accessKeyId'),
         secretAccessKey: configService.get('s3.secretAccessKey'),
       },
+      forcePathStyle: true,
     });
     this.bucket = configService.get('s3.bucket');
     this.cdnUrl = configService.get('s3.cdnUrl');

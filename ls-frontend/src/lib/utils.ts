@@ -5,6 +5,25 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+// Shimmer SVG encodé en base64 pour placeholder="blur" sur les images produits
+const _shimmerSvg = (w: number, h: number) =>
+  `<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg">
+    <rect width="${w}" height="${h}" fill="#e2e8f0"/>
+    <rect width="${w}" height="${h}" fill="url(#g)"/>
+    <defs>
+      <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" stop-color="#e2e8f0"/>
+        <stop offset="50%" stop-color="#f1f5f9"/>
+        <stop offset="100%" stop-color="#e2e8f0"/>
+      </linearGradient>
+    </defs>
+  </svg>`
+
+const _toBase64 = (s: string) =>
+  typeof window === 'undefined' ? Buffer.from(s).toString('base64') : window.btoa(s)
+
+export const imgBlurDataURL = `data:image/svg+xml;base64,${_toBase64(_shimmerSvg(800, 600))}`
+
 export function formatPrice(amount: number, currency = 'XOF'): string {
   return new Intl.NumberFormat('fr-TG', {
     style: 'currency',

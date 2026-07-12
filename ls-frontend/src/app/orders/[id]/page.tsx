@@ -1,4 +1,5 @@
 'use client'
+import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -11,6 +12,7 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '@/store/auth.store'
+import { useCartStore } from '@/store/cart.store'
 import { Order } from '@/types'
 import { formatPrice, timeAgo, getStatusLabel, cn } from '@/lib/utils'
 import api from '@/lib/api'
@@ -24,6 +26,74 @@ const STATUS_STEPS = [
   { key: 'COMPLETED', label: 'Terminé', icon: Award },
 ]
 
+const ESCROW_STEPS = [
+  { key: 'transfer', label: 'Virement à effectuer', desc: 'Envoyez le montant exact avec la référence' },
+  { key: 'verify',   label: 'Vérification admin',   desc: 'Notre équipe valide votre virement (24-48h)' },
+  { key: 'confirmed',label: 'Paiement confirmé',    desc: 'Traitement de votre commande lancé' },
+]
+
+function EscrowTracker({ status, orderNumber, totalAmount }: { status: string; orderNumber: string; totalAmount: number }) {
+  const reference = `ESC-${orderNumber.toUpperCase()}`
+  const activeIdx = status === 'PAYMENT_CONFIRMED' || STATUS_ORDER.indexOf(status) > STATUS_ORDER.indexOf('PAYMENT_CONFIRMED')
+    ? 2
+    : status === 'PENDING' ? 0 : 1
+
+  return (
+    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 mb-5">
+      <div className="flex items-start gap-3 mb-5">
+        <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+          <CreditCard size={16} className="text-amber-600" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <h3 className="text-sm font-bold text-amber-900">Virement bancaire en cours de traitement</h3>
+          <p className="text-xs text-amber-600 mt-0.5">
+            Référence : <span className="font-mono font-bold tracking-wide">{reference}</span>
+          </p>
+        </div>
+        <div className="text-right shrink-0">
+          <p className="text-xs text-amber-600">Montant</p>
+          <p className="text-sm font-bold text-amber-900">{totalAmount.toLocaleString()} FCFA</p>
+        </div>
+      </div>
+
+      {/* Timeline */}
+      <div className="flex items-start">
+        {ESCROW_STEPS.map((step, idx) => (
+          <div key={step.key} className="flex-1 flex flex-col items-center gap-1.5 relative">
+            {idx < ESCROW_STEPS.length - 1 && (
+              <div className={`absolute top-4 left-1/2 right-0 h-0.5 transition-colors ${idx < activeIdx ? 'bg-amber-400' : 'bg-amber-200'}`} />
+            )}
+            <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center z-10 transition-all ${
+              idx < activeIdx ? 'bg-amber-400 border-amber-400 text-white'
+              : idx === activeIdx ? 'bg-white border-amber-400 text-amber-600 ring-4 ring-amber-100'
+              : 'bg-white border-amber-200 text-amber-300'
+            }`}>
+              {idx < activeIdx
+                ? <CheckCircle size={14} />
+                : <span className="text-xs font-bold">{idx + 1}</span>
+              }
+            </div>
+            <span className={`text-[11px] font-semibold text-center leading-tight px-1 ${idx <= activeIdx ? 'text-amber-800' : 'text-amber-400'}`}>
+              {step.label}
+            </span>
+            <span className="text-[10px] text-amber-500 text-center leading-tight px-1 hidden sm:block">{step.desc}</span>
+          </div>
+        ))}
+      </div>
+
+      {activeIdx === 0 && (
+        <div className="mt-5 pt-4 border-t border-amber-200 space-y-1.5 text-xs text-amber-800">
+          <p className="font-semibold">Coordonnées bancaires :</p>
+          <p>Banque : <span className="font-medium">ECOBANK TOGO</span></p>
+          <p>Intitulé : <span className="font-medium">LS MARKETPLACE</span></p>
+          <p>Référence obligatoire : <span className="font-mono font-bold text-amber-900">{reference}</span></p>
+          <p className="text-amber-600 mt-2">Votre commande sera traitée dès confirmation du virement par notre équipe.</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 const STATUS_ORDER = ['PENDING', 'PAYMENT_CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'COMPLETED']
 
 function getStepIndex(status: string) {
@@ -34,12 +104,7 @@ function getStepIndex(status: string) {
 export default function OrderDetailPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
-  const { user, isAuthenticated } = useAuthStore()
-
-  if (!isAuthenticated) {
-    router.push('/auth/login')
-    return null
-  }
+  const { user, isAuthenticated, _hasHydrated } = useAuthStore()
 
   const { data, isLoading } = useQuery({
     queryKey: ['order', id],
@@ -51,6 +116,23 @@ export default function OrderDetailPage() {
     mutationFn: () => api.patch(`/orders/${id}/cancel`),
     onSuccess: () => toast.success('Commande annulée'),
     onError: (err: any) => toast.error(err.response?.data?.message || 'Impossible d\'annuler'),
+  })
+
+  const [confirmCancel, setConfirmCancel] = useState(false)
+  const [showDisputeForm, setShowDisputeForm] = useState(false)
+  const [disputeReason, setDisputeReason] = useState('')
+  const [disputeDescription, setDisputeDescription] = useState('')
+
+  const disputeMutation = useMutation({
+    mutationFn: () => api.post(`/orders/${id}/dispute`, {
+      reason: disputeReason,
+      description: disputeDescription,
+    }),
+    onSuccess: () => {
+      toast.success('Litige ouvert. Notre équipe vous contactera sous 48h.')
+      setShowDisputeForm(false)
+    },
+    onError: (err: any) => toast.error(err.response?.data?.message || 'Impossible d\'ouvrir le litige'),
   })
 
   const confirmDeliveryMutation = useMutation({
@@ -68,6 +150,23 @@ export default function OrderDetailPage() {
       toast.success('Numéro de suivi copié')
     }
   }
+
+  useEffect(() => {
+    if (_hasHydrated && !isAuthenticated) router.push('/auth/login')
+  }, [_hasHydrated, isAuthenticated, router])
+
+  const clearCart = useCartStore((s) => s.clearCart)
+  useEffect(() => {
+    const payment = new URLSearchParams(window.location.search).get('payment')
+    if (payment === 'success') {
+      clearCart()
+      toast.success('Paiement confirmé ! Votre commande est en cours.')
+    }
+    else if (payment === 'pending') toast.loading('Vérification du paiement en cours…', { duration: 5000 })
+    else if (payment === 'cancelled') toast.error('Paiement annulé ou refusé.')
+  }, [clearCart])
+
+  if (!_hasHydrated) return <div className="min-h-screen flex items-center justify-center"><Loader2 size={28} className="animate-spin text-primary" /></div>
 
   if (isLoading) {
     return (
@@ -153,6 +252,15 @@ export default function OrderDetailPage() {
               })}
             </div>
           </div>
+        )}
+
+        {/* Escrow tracker — virement bancaire uniquement */}
+        {(order as any).payment?.method === 'BANK_TRANSFER' && !['CANCELLED', 'REFUNDED'].includes(order.status) && (
+          <EscrowTracker
+            status={order.status}
+            orderNumber={order.orderNumber || order.id.slice(0, 8).toUpperCase()}
+            totalAmount={order.totalAmount}
+          />
         )}
 
         <div className="space-y-4">
@@ -321,29 +429,76 @@ export default function OrderDetailPage() {
               )}
 
               {/* Cancel (buyer, only if PENDING) */}
-              {isBuyer && order.status === 'PENDING' && (
+              {isBuyer && order.status === 'PENDING' && !confirmCancel && (
                 <button
-                  onClick={() => {
-                    if (confirm('Annuler cette commande ?')) cancelMutation.mutate()
-                  }}
-                  disabled={cancelMutation.isPending}
+                  onClick={() => setConfirmCancel(true)}
                   className="btn-sm border border-danger/30 text-danger hover:bg-danger/10 rounded-xl px-4 py-2 text-sm font-medium transition-colors gap-2 flex items-center"
                 >
-                  {cancelMutation.isPending ? <Loader2 size={15} className="animate-spin" /> : <XCircle size={15} />}
-                  Annuler la commande
+                  <XCircle size={15} /> Annuler la commande
                 </button>
+              )}
+              {isBuyer && order.status === 'PENDING' && confirmCancel && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-dark">Annuler cette commande ?</span>
+                  <button
+                    onClick={() => { cancelMutation.mutate(); setConfirmCancel(false) }}
+                    disabled={cancelMutation.isPending}
+                    className="btn-sm border border-danger text-danger hover:bg-danger/10 rounded-xl px-3 py-1.5 text-sm font-semibold flex items-center gap-1"
+                  >
+                    {cancelMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : null}
+                    Confirmer
+                  </button>
+                  <button onClick={() => setConfirmCancel(false)} className="text-sm text-muted hover:text-dark">
+                    Non
+                  </button>
+                </div>
               )}
 
               {/* Dispute */}
-              {isBuyer && ['DELIVERED'].includes(order.status) && (
+              {isBuyer && ['DELIVERED'].includes(order.status) && !showDisputeForm && (
                 <button
-                  onClick={() => toast('Ouverture d\'un litige — bientôt disponible', { icon: '⚠️' })}
+                  onClick={() => setShowDisputeForm(true)}
                   className="btn-sm border border-orange-300 text-orange-600 hover:bg-orange-50 rounded-xl px-4 py-2 text-sm font-medium transition-colors gap-2 flex items-center"
                 >
                   <AlertCircle size={15} /> Ouvrir un litige
                 </button>
               )}
             </div>
+
+            {/* Dispute form */}
+            {isBuyer && showDisputeForm && (
+              <div className="w-full mt-3 space-y-2">
+                <input
+                  value={disputeReason}
+                  onChange={(e) => setDisputeReason(e.target.value)}
+                  placeholder="Motif du litige (ex : article non reçu)"
+                  className="w-full text-sm border border-border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-300/50"
+                />
+                <textarea
+                  value={disputeDescription}
+                  onChange={(e) => setDisputeDescription(e.target.value)}
+                  placeholder="Décrivez le problème en détail…"
+                  rows={3}
+                  className="w-full text-sm border border-border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-300/50 resize-none"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => disputeMutation.mutate()}
+                    disabled={!disputeReason.trim() || !disputeDescription.trim() || disputeMutation.isPending}
+                    className="btn-sm border border-orange-300 text-orange-600 hover:bg-orange-50 rounded-xl px-4 py-2 text-sm font-medium transition-colors gap-2 flex items-center disabled:opacity-50"
+                  >
+                    {disputeMutation.isPending ? <Loader2 size={15} className="animate-spin" /> : <AlertCircle size={15} />}
+                    Confirmer le litige
+                  </button>
+                  <button
+                    onClick={() => { setShowDisputeForm(false); setDisputeReason(''); setDisputeDescription('') }}
+                    className="btn-sm border border-border text-muted hover:text-dark rounded-xl px-3 py-2 text-sm transition-colors"
+                  >
+                    Annuler
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="mt-4 flex items-start gap-2 text-xs text-muted bg-surface rounded-xl p-3">
               <Shield size={14} className="text-primary mt-0.5 flex-shrink-0" />

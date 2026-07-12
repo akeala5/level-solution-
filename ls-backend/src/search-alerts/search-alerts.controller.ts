@@ -1,9 +1,12 @@
 import {
   Controller, Get, Post, Delete, Patch,
-  Body, Param, ParseUUIDPipe,
+  Body, Param, ParseUUIDPipe, UseGuards,
 } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { SearchAlertsService } from './search-alerts.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { Roles } from '../common/decorators/roles.decorator';
+import { RolesGuard } from '../common/guards/roles.guard';
 
 @Controller('search-alerts')
 export class SearchAlertsController {
@@ -36,5 +39,13 @@ export class SearchAlertsController {
     @Param('id', ParseUUIDPipe) alertId: string,
   ) {
     return this.searchAlertsService.delete(userId, alertId);
+  }
+
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN' as any, 'MODERATOR' as any)
+  @Get('admin/heatmap')
+  @ApiOperation({ summary: '[Admin] Top requêtes de recherche (heatmap)' })
+  getSearchHeatmap() {
+    return this.searchAlertsService.getSearchHeatmap();
   }
 }

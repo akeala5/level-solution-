@@ -28,33 +28,33 @@ const BUYERS = [
 
 const PRODUCTS_DATA = [
   // Ordinateurs
-  { title: 'Laptop HP ProBook 450 G8 Intel Core i5', category: 'ordinateurs', price: 320000, stock: 5, condition: 'USED', brand: 'HP', model: 'ProBook 450 G8' },
-  { title: 'MacBook Air M1 2021 256Go SSD', category: 'ordinateurs', price: 580000, stock: 3, condition: 'USED', brand: 'Apple', model: 'MacBook Air M1' },
-  { title: 'Ordinateur portable Dell Latitude 5520 i7', category: 'ordinateurs', price: 450000, stock: 2, condition: 'REFURBISHED', brand: 'Dell', model: 'Latitude 5520' },
-  { title: 'PC Bureau Dell OptiPlex 7090 Core i5 SSD', category: 'ordinateurs', price: 280000, stock: 4, condition: 'USED', brand: 'Dell', model: 'OptiPlex 7090' },
-  { title: 'Lenovo ThinkPad X1 Carbon i7 16Go RAM', category: 'ordinateurs', price: 620000, stock: 1, condition: 'USED', brand: 'Lenovo', model: 'ThinkPad X1 Carbon' },
-  { title: 'HP EliteBook 840 G6 14 pouces i5 8Go', category: 'ordinateurs', price: 290000, stock: 6, condition: 'REFURBISHED', brand: 'HP', model: 'EliteBook 840 G6' },
-  { title: 'PC Portable Asus VivoBook 15 AMD Ryzen 5', category: 'ordinateurs', price: 245000, stock: 3, condition: 'USED', brand: 'Asus', model: 'VivoBook 15' },
+  { title: 'Laptop HP ProBook 450 G8 Intel Core i5', category: 'ordinateurs', price: 320000, stock: 5, condition: 'GOOD', brand: 'HP', model: 'ProBook 450 G8' },
+  { title: 'MacBook Air M1 2021 256Go SSD', category: 'ordinateurs', price: 580000, stock: 3, condition: 'VERY_GOOD', brand: 'Apple', model: 'MacBook Air M1' },
+  { title: 'Ordinateur portable Dell Latitude 5520 i7', category: 'ordinateurs', price: 450000, stock: 2, condition: 'VERY_GOOD', brand: 'Dell', model: 'Latitude 5520' },
+  { title: 'PC Bureau Dell OptiPlex 7090 Core i5 SSD', category: 'ordinateurs', price: 280000, stock: 4, condition: 'GOOD', brand: 'Dell', model: 'OptiPlex 7090' },
+  { title: 'Lenovo ThinkPad X1 Carbon i7 16Go RAM', category: 'ordinateurs', price: 620000, stock: 1, condition: 'VERY_GOOD', brand: 'Lenovo', model: 'ThinkPad X1 Carbon' },
+  { title: 'HP EliteBook 840 G6 14 pouces i5 8Go', category: 'ordinateurs', price: 290000, stock: 6, condition: 'VERY_GOOD', brand: 'HP', model: 'EliteBook 840 G6' },
+  { title: 'PC Portable Asus VivoBook 15 AMD Ryzen 5', category: 'ordinateurs', price: 245000, stock: 3, condition: 'GOOD', brand: 'Asus', model: 'VivoBook 15' },
 
   // Composants
   { title: 'RAM DDR4 16Go 3200MHz Kingston Fury', category: 'composants', price: 45000, stock: 15, condition: 'NEW', brand: 'Kingston', model: 'Fury Beast' },
   { title: 'SSD Samsung 970 EVO Plus 500Go NVMe', category: 'composants', price: 55000, stock: 8, condition: 'NEW', brand: 'Samsung', model: '970 EVO Plus' },
-  { title: 'Processeur Intel Core i7-11700K 8 Cœurs', category: 'composants', price: 120000, stock: 4, condition: 'USED', brand: 'Intel', model: 'Core i7-11700K' },
-  { title: 'Carte graphique GTX 1660 Super 6Go GDDR6', category: 'composants', price: 145000, stock: 2, condition: 'USED', brand: 'Nvidia', model: 'GTX 1660 Super' },
+  { title: 'Processeur Intel Core i7-11700K 8 Cœurs', category: 'composants', price: 120000, stock: 4, condition: 'GOOD', brand: 'Intel', model: 'Core i7-11700K' },
+  { title: 'Carte graphique GTX 1660 Super 6Go GDDR6', category: 'composants', price: 145000, stock: 2, condition: 'GOOD', brand: 'Nvidia', model: 'GTX 1660 Super' },
   { title: 'Carte mère ASUS ROG Strix B550-F Gaming', category: 'composants', price: 95000, stock: 3, condition: 'NEW', brand: 'Asus', model: 'ROG Strix B550-F' },
   { title: 'Alimentation Corsair 650W 80+ Gold Modulaire', category: 'composants', price: 42000, stock: 7, condition: 'NEW', brand: 'Corsair', model: 'RM650x' },
 
   // Réseau
   { title: 'Switch TP-Link 24 ports Gigabit TL-SG1024', category: 'reseau-serveurs', price: 65000, stock: 5, condition: 'NEW', brand: 'TP-Link', model: 'TL-SG1024' },
-  { title: 'Routeur Cisco RV340 Dual WAN VPN', category: 'reseau-serveurs', price: 185000, stock: 2, condition: 'USED', brand: 'Cisco', model: 'RV340' },
-  { title: 'Point d\'accès WiFi Ubiquiti UniFi AP-AC-Pro', category: 'reseau-serveurs', price: 75000, stock: 4, condition: 'USED', brand: 'Ubiquiti', model: 'UAP-AC-PRO' },
+  { title: 'Routeur Cisco RV340 Dual WAN VPN', category: 'reseau-serveurs', price: 185000, stock: 2, condition: 'GOOD', brand: 'Cisco', model: 'RV340' },
+  { title: 'Point d\'accès WiFi Ubiquiti UniFi AP-AC-Pro', category: 'reseau-serveurs', price: 75000, stock: 4, condition: 'GOOD', brand: 'Ubiquiti', model: 'UAP-AC-PRO' },
   { title: 'NAS Synology DS220+ 2 baies sans disque', category: 'reseau-serveurs', price: 130000, stock: 3, condition: 'NEW', brand: 'Synology', model: 'DS220+' },
 
   // Périphériques
-  { title: 'Écran Dell UltraSharp 24" U2422H IPS', category: 'peripheriques', price: 145000, stock: 4, condition: 'USED', brand: 'Dell', model: 'U2422H' },
+  { title: 'Écran Dell UltraSharp 24" U2422H IPS', category: 'peripheriques', price: 145000, stock: 4, condition: 'GOOD', brand: 'Dell', model: 'U2422H' },
   { title: 'Clavier mécanique Logitech MX Keys', category: 'peripheriques', price: 38000, stock: 10, condition: 'NEW', brand: 'Logitech', model: 'MX Keys' },
   { title: 'Souris sans fil Logitech MX Master 3', category: 'peripheriques', price: 42000, stock: 8, condition: 'NEW', brand: 'Logitech', model: 'MX Master 3' },
-  { title: 'Imprimante HP LaserJet Pro M404dn', category: 'peripheriques', price: 125000, stock: 3, condition: 'USED', brand: 'HP', model: 'LaserJet Pro M404dn' },
+  { title: 'Imprimante HP LaserJet Pro M404dn', category: 'peripheriques', price: 125000, stock: 3, condition: 'GOOD', brand: 'HP', model: 'LaserJet Pro M404dn' },
   { title: 'Webcam Logitech C920 HD Pro 1080p', category: 'peripheriques', price: 28000, stock: 12, condition: 'NEW', brand: 'Logitech', model: 'C920' },
 
   // Accessoires
@@ -64,9 +64,9 @@ const PRODUCTS_DATA = [
   { title: 'Câbles HDMI 4K 2m lot de 3', category: 'accessoires', price: 8500, stock: 30, condition: 'NEW', brand: 'Générique', model: 'HDMI 4K' },
 
   // Mobiles & Tablettes
-  { title: 'Samsung Galaxy Tab A8 10.5" 64Go WiFi', category: 'mobiles-tablettes', price: 85000, stock: 5, condition: 'USED', brand: 'Samsung', model: 'Galaxy Tab A8' },
-  { title: 'iPad 9e génération 64Go WiFi', category: 'mobiles-tablettes', price: 175000, stock: 3, condition: 'USED', brand: 'Apple', model: 'iPad 9th Gen' },
-  { title: 'Samsung Galaxy S21 FE 5G 128Go', category: 'mobiles-tablettes', price: 195000, stock: 4, condition: 'USED', brand: 'Samsung', model: 'Galaxy S21 FE' },
+  { title: 'Samsung Galaxy Tab A8 10.5" 64Go WiFi', category: 'mobiles-tablettes', price: 85000, stock: 5, condition: 'GOOD', brand: 'Samsung', model: 'Galaxy Tab A8' },
+  { title: 'iPad 9e génération 64Go WiFi', category: 'mobiles-tablettes', price: 175000, stock: 3, condition: 'VERY_GOOD', brand: 'Apple', model: 'iPad 9th Gen' },
+  { title: 'Samsung Galaxy S21 FE 5G 128Go', category: 'mobiles-tablettes', price: 195000, stock: 4, condition: 'GOOD', brand: 'Samsung', model: 'Galaxy S21 FE' },
 
   // Logiciels
   { title: 'Licence Microsoft Office 2021 Pro (1 PC)', category: 'logiciels-licences', price: 45000, stock: 999, condition: 'NEW', brand: 'Microsoft', model: 'Office 2021 Pro' },
@@ -74,9 +74,9 @@ const PRODUCTS_DATA = [
   { title: 'Adobe Creative Cloud 1 an (toutes applis)', category: 'logiciels-licences', price: 185000, stock: 999, condition: 'NEW', brand: 'Adobe', model: 'Creative Cloud' },
 
   // Reconditionné
-  { title: 'Laptop HP 840 G5 Reconditionné Grade A+', category: 'reconditionne-ls', price: 220000, stock: 8, condition: 'REFURBISHED', brand: 'HP', model: 'EliteBook 840 G5' },
-  { title: 'iPhone 11 64Go Reconditionné Grade B', category: 'reconditionne-ls', price: 190000, stock: 5, condition: 'REFURBISHED', brand: 'Apple', model: 'iPhone 11' },
-  { title: 'Dell XPS 13 9310 Reconditionné Grade A', category: 'reconditionne-ls', price: 480000, stock: 2, condition: 'REFURBISHED', brand: 'Dell', model: 'XPS 13 9310' },
+  { title: 'Laptop HP 840 G5 Reconditionné Grade A+', category: 'reconditionne-ls', price: 220000, stock: 8, condition: 'VERY_GOOD', brand: 'HP', model: 'EliteBook 840 G5' },
+  { title: 'iPhone 11 64Go Reconditionné Grade B', category: 'reconditionne-ls', price: 190000, stock: 5, condition: 'GOOD', brand: 'Apple', model: 'iPhone 11' },
+  { title: 'Dell XPS 13 9310 Reconditionné Grade A', category: 'reconditionne-ls', price: 480000, stock: 2, condition: 'VERY_GOOD', brand: 'Dell', model: 'XPS 13 9310' },
 ];
 
 async function main() {
@@ -213,7 +213,7 @@ async function main() {
         description: `${p.title} — en excellent état. Livraison disponible dans toute l'Afrique de l'Ouest. Paiement Mobile Money accepté (Wave, Orange Money, MTN MoMo).`,
         price: p.price,
         originalPrice: p.condition !== 'NEW' ? Math.floor(p.price * 1.25) : null,
-        stock: p.stock,
+        quantity: p.stock,
         condition: p.condition as any,
         brand: p.brand,
         model: p.model,
@@ -263,20 +263,16 @@ async function main() {
           sellerId,
           status: status as any,
           totalAmount,
-          commission,
+          commissionAmount: commission,
           sellerAmount,
-          currency: 'XOF',
-          paymentMethod: paymentMethod as any,
-          deliveryAddress: { street: '123 Rue Demo', city: 'Lomé', country: 'TG' },
           escrowReleaseAt: status === 'DELIVERED' ? new Date(Date.now() + 48 * 60 * 60 * 1000) : null,
           completedAt: status === 'COMPLETED' ? new Date(Date.now() - 24 * 60 * 60 * 1000 * (i + 1)) : null,
           items: {
             create: [{
               productId,
               quantity,
-              unitPrice: product.price,
-              totalPrice: totalAmount,
-              productTitle: product.title,
+              price: product.price,
+              title: product.title,
             }],
           },
           payment: {

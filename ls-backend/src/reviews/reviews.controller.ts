@@ -17,6 +17,17 @@ export class ReviewsController {
   }
 
   @ApiBearerAuth()
+  @Get('my')
+  @ApiOperation({ summary: 'Mes avis donnés (acheteur)' })
+  myReviews(
+    @CurrentUser('id') userId: string,
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
+  ) {
+    return this.reviewsService.getMyReviews(userId, page, limit);
+  }
+
+  @ApiBearerAuth()
   @Patch(':id/reply')
   @ApiOperation({ summary: 'Répondre à un avis (vendeur)' })
   reply(@CurrentUser('id') userId: string, @Param('id') id: string, @Body() body: { reply: string }) {

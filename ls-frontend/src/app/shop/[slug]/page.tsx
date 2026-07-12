@@ -291,11 +291,11 @@ export default function ShopPage() {
                         <div className="flex items-start justify-between gap-3 mb-2">
                           <div className="flex items-center gap-3">
                             <div className="w-9 h-9 bg-primary/10 rounded-full flex items-center justify-center text-primary text-sm font-bold flex-shrink-0">
-                              {review.buyer?.profile?.firstName?.[0] || (review as any).giver?.firstName?.[0] || '?'}
+                              {review.giver?.firstName?.[0] || '?'}
                             </div>
                             <div>
                               <p className="font-semibold text-dark text-sm">
-                                {review.buyer?.profile?.firstName || (review as any).giver?.firstName} {review.buyer?.profile?.lastName?.[0] || (review as any).giver?.lastName?.[0]}.
+                                {review.giver?.firstName}.
                               </p>
                               <div className="flex">
                                 {[1,2,3,4,5].map((s) => (

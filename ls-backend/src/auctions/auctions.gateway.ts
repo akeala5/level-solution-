@@ -8,8 +8,6 @@ import {
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { UseGuards } from '@nestjs/common';
-import { WsJwtGuard } from '../common/guards/ws-jwt.guard';
 
 @WebSocketGateway({
   namespace: '/auctions',

@@ -25,6 +25,7 @@ export interface Profile {
   country: string
   language: string
   currency: string
+  notificationPreferences?: Record<string, boolean>
 }
 
 export interface SellerProfile {
@@ -69,6 +70,36 @@ export interface Category {
   _count?: { products: number }
 }
 
+export interface AuctionBid {
+  id: string
+  bidderId: string
+  amount: number
+  isAuto: boolean
+  createdAt: string
+}
+
+export interface Auction {
+  id: string
+  productId: string
+  startingPrice: number
+  currentPrice: number
+  reservePrice?: number
+  minBidIncrement: number
+  startsAt: string
+  endsAt: string
+  status: 'ACTIVE' | 'ENDED' | 'CANCELLED'
+  winnerId?: string
+  product: {
+    id: string
+    title: string
+    description?: string
+    images: { id: string; url: string }[]
+    seller?: { id: string; firstName: string; lastName: string }
+  }
+  bids?: AuctionBid[]
+  _count?: { bids: number }
+}
+
 export interface ProductImage {
   id: string
   url: string
@@ -101,6 +132,11 @@ export interface Product {
   isNegotiable: boolean
   isReconditioned: boolean
   isFeatured: boolean
+  isFlash: boolean
+  flashEndsAt?: string
+  isBundle: boolean
+  bundleItems?: { name: string; quantity: number; unitPrice?: number }[]
+  bundleDiscount?: number
   publishedAt?: string
   createdAt: string
   images: ProductImage[]

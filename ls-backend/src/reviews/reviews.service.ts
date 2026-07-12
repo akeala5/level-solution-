@@ -113,6 +113,22 @@ export class ReviewsService {
     return { message: 'Avis vendeur', data: reviews, meta: paginate(total, page, limit) };
   }
 
+  async getMyReviews(giverId: string, page = 1, limit = 10) {
+    const { skip, take } = getPaginationParams(page, limit);
+    const [reviews, total] = await Promise.all([
+      this.prisma.review.findMany({
+        where: { giverId },
+        skip, take,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          product: { select: { title: true, slug: true, images: { where: { isPrimary: true }, take: 1 } } },
+        },
+      }),
+      this.prisma.review.count({ where: { giverId } }),
+    ]);
+    return { message: 'Mes avis', data: reviews, meta: paginate(total, page, limit) };
+  }
+
   private async updateSellerRating(sellerId: string) {
     const stats = await this.prisma.review.aggregate({
       where: { receiverId: sellerId },

@@ -7,6 +7,8 @@ interface AuthState {
   user: User | null
   isAuthenticated: boolean
   isLoading: boolean
+  _hasHydrated: boolean
+  setHasHydrated: (v: boolean) => void
   setUser: (user: User | null) => void
   setLoading: (v: boolean) => void
   login: (user: User, accessToken: string, refreshToken: string) => void
@@ -20,6 +22,8 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       isAuthenticated: false,
       isLoading: false,
+      _hasHydrated: false,
+      setHasHydrated: (v) => set({ _hasHydrated: v }),
       setUser: (user) => set({ user, isAuthenticated: !!user }),
       setLoading: (isLoading) => set({ isLoading }),
       login: (user, accessToken, refreshToken) => {
@@ -35,7 +39,9 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'ls-auth',
+      skipHydration: true,
       partialize: (state) => ({ user: state.user, isAuthenticated: state.isAuthenticated }),
+      onRehydrateStorage: () => (state) => { state?.setHasHydrated(true) },
     }
   )
 )

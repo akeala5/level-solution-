@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -23,8 +23,9 @@ const SUB_RATINGS = [
 export default function ReviewPage() {
   const { orderId } = useParams<{ orderId: string }>()
   const router = useRouter()
-  const { isAuthenticated } = useAuthStore()
+  const { isAuthenticated, _hasHydrated } = useAuthStore()
 
+  const [currentItemIdx, setCurrentItemIdx] = useState(0)
   const [globalRating, setGlobalRating] = useState(0)
   const [hoveredRating, setHoveredRating] = useState(0)
   const [subRatings, setSubRatings] = useState<Record<string, number>>({
@@ -35,10 +36,16 @@ export default function ReviewPage() {
   const [comment, setComment] = useState('')
   const [success, setSuccess] = useState(false)
 
-  if (!isAuthenticated) {
-    router.push('/auth/login')
-    return null
+  const resetForm = () => {
+    setGlobalRating(0)
+    setHoveredRating(0)
+    setSubRatings({ ratingProduct: 0, ratingCommunication: 0, ratingDelivery: 0 })
+    setComment('')
   }
+
+  useEffect(() => {
+    if (_hasHydrated && !isAuthenticated) router.push('/auth/login')
+  }, [_hasHydrated, isAuthenticated, router])
 
   const { data: order, isLoading } = useQuery({
     queryKey: ['order-review', orderId],
@@ -46,18 +53,30 @@ export default function ReviewPage() {
     enabled: !!orderId,
   })
 
+  const items = order?.items ?? []
+  const totalItems = items.length
+  const currentItem = items[currentItemIdx]
+
   const submitMutation = useMutation({
     mutationFn: () =>
       api.post('/reviews', {
         orderId,
-        productId: order?.items?.[0]?.productId,
+        productId: currentItem?.productId,
         rating: globalRating,
         comment: comment.trim() || undefined,
         ratingProduct: subRatings.ratingProduct || undefined,
         ratingCommunication: subRatings.ratingCommunication || undefined,
         ratingDelivery: subRatings.ratingDelivery || undefined,
       }),
-    onSuccess: () => setSuccess(true),
+    onSuccess: () => {
+      if (currentItemIdx < totalItems - 1) {
+        setCurrentItemIdx((i) => i + 1)
+        resetForm()
+        toast.success(`Avis envoyé (${currentItemIdx + 1}/${totalItems})`)
+      } else {
+        setSuccess(true)
+      }
+    },
     onError: (err: any) => {
       toast.error(err.response?.data?.message || 'Erreur lors de l\'envoi de l\'avis')
     },
@@ -70,6 +89,8 @@ export default function ReviewPage() {
     }
     submitMutation.mutate()
   }
+
+  if (!_hasHydrated) return <div className="min-h-screen flex items-center justify-center"><Loader2 size={28} className="animate-spin text-primary" /></div>
 
   if (isLoading) {
     return (
@@ -123,7 +144,7 @@ export default function ReviewPage() {
     )
   }
 
-  const product = order?.items?.[0]?.product
+  const product = currentItem?.product
   const seller = order?.seller
 
   return (
@@ -134,7 +155,12 @@ export default function ReviewPage() {
           <Link href={`/orders/${orderId}`} className="w-9 h-9 border border-border rounded-xl flex items-center justify-center hover:bg-white transition-colors">
             <ArrowLeft size={16} />
           </Link>
-          <h1 className="heading-sm text-dark">Laisser un avis</h1>
+          <div>
+            <h1 className="heading-sm text-dark">Laisser un avis</h1>
+            {totalItems > 1 && (
+              <p className="text-xs text-muted">Produit {currentItemIdx + 1} sur {totalItems}</p>
+            )}
+          </div>
         </div>
 
         {/* Product recap */}
@@ -143,7 +169,7 @@ export default function ReviewPage() {
             <div className="flex items-center gap-4">
               <div className="w-16 h-16 rounded-xl overflow-hidden bg-surface border border-border flex-shrink-0">
                 {product?.images?.[0]?.url ? (
-                  <Image src={product.images[0].url} alt={order.items[0]?.title} width={64} height={64} className="object-cover w-full h-full" />
+                  <Image src={product.images[0].url} alt={currentItem?.title ?? ''} width={64} height={64} className="object-cover w-full h-full" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
                     <Package size={20} className="text-muted" />
@@ -151,7 +177,7 @@ export default function ReviewPage() {
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-semibold text-dark text-sm truncate">{order.items[0]?.title}</p>
+                <p className="font-semibold text-dark text-sm truncate">{currentItem?.title}</p>
                 <p className="text-xs text-muted">Commandé le {new Date(order.createdAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
                 <p className="text-primary font-bold text-sm mt-0.5">{formatPrice(order.totalAmount)}</p>
               </div>
@@ -269,7 +295,10 @@ export default function ReviewPage() {
               <Loader2 size={18} className="animate-spin" />
             ) : (
               <>
-                <Send size={16} /> Publier mon avis
+                <Send size={16} />
+                {totalItems > 1 && currentItemIdx < totalItems - 1
+                  ? `Avis suivant (${currentItemIdx + 2}/${totalItems})`
+                  : 'Publier mon avis'}
               </>
             )}
           </button>
