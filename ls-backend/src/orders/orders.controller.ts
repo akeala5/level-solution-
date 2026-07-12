@@ -23,6 +23,15 @@ export class OrdersController {
     return this.ordersService.createOrder(buyerId, data);
   }
 
+  @Post('checkout')
+  @ApiOperation({ summary: 'Checkout transactionnel — tout le panier, groupé par vendeur (1 sous-commande/vendeur)' })
+  createCheckout(
+    @CurrentUser('id') buyerId: string,
+    @Body() data: { items: { productId: string; quantity?: number }[]; addressId?: string; notes?: string },
+  ) {
+    return this.ordersService.createCheckout(buyerId, data);
+  }
+
   @Get('buying')
   @ApiOperation({ summary: 'Mes commandes (acheteur)' })
   getBuyerOrders(

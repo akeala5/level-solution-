@@ -3,9 +3,10 @@ import { OrdersService } from './orders.service';
 import { OrdersController } from './orders.controller';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { WebhooksModule } from '../webhooks/webhooks.module';
+import { WalletModule } from '../wallet/wallet.module';
 
 @Module({
-  imports: [NotificationsModule, WebhooksModule],
+  imports: [NotificationsModule, WebhooksModule, WalletModule],
   controllers: [OrdersController],
   providers: [OrdersService],
   exports: [OrdersService],
