@@ -14,6 +14,7 @@ import {
   Wrench, Tractor, Hammer, Music, Gamepad2,
   Leaf, Sun, Stethoscope, GraduationCap, Briefcase,
   Building2, Fish, PawPrint, Plane, Gem, Gavel,
+  Wallet, Banknote,
 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import LanguageSwitcher from '../common/LanguageSwitcher'
@@ -384,9 +385,13 @@ export default function Header() {
                             {[
                               { icon: LayoutDashboard, label: t('dashboard'),  href: '/dashboard' },
                               { icon: Package,         label: t('orders'),    href: '/dashboard/buyer' },
+                              { icon: Wallet,          label: 'Portefeuille', href: '/dashboard/wallet' },
                               { icon: Heart,           label: t('favorites'), href: '/dashboard/buyer' },
                               { icon: MessageSquare,   label: t('messages'),  href: '/chat' },
                               { icon: Settings,        label: t('settings'),  href: '/profile' },
+                              ...(['ADMIN', 'MODERATOR'].includes(user?.role || '')
+                                ? [{ icon: Banknote, label: 'Retraits', href: '/admin/payouts' }]
+                                : []),
                             ].map(({ icon: Icon, label, href }) => (
                               <Link key={href} href={href} onClick={() => setUserMenuOpen(false)}
                                 className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-surface text-sm text-dark hover:text-primary transition-colors">
@@ -476,9 +481,13 @@ export default function Header() {
                 <div className="mt-4 pt-4 border-t border-border space-y-1">
                   {[
                     { label: t('dashboard'), href: '/dashboard' },
+                    { label: 'Portefeuille', href: '/dashboard/wallet' },
                     { label: t('messages'),  href: '/chat' },
                     { label: t('orders'),    href: '/dashboard/buyer' },
                     { label: t('settings'),  href: '/profile' },
+                    ...(['ADMIN', 'MODERATOR'].includes(user?.role || '')
+                      ? [{ label: 'Retraits', href: '/admin/payouts' }]
+                      : []),
                   ].map(({ label, href }) => (
                     <Link key={href} href={href} onClick={() => setMobileOpen(false)}
                       className="block px-3 py-3 rounded-xl hover:bg-gray-50 font-medium text-dark">{label}</Link>
