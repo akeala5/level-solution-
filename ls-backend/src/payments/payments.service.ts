@@ -385,16 +385,18 @@ export class PaymentsService {
   }
 
   async handleFedaPayCallback(rawBody: Buffer, signature?: string) {
-    // Vérification HMAC-SHA256 si le secret est configuré
+    // Signature TOUJOURS obligatoire (fail-closed) : sans secret configuré ou
+    // sans signature valide, le callback est rejeté — jamais traité.
     const webhookSecret = this.configService.get<string>('fedapay.webhookSecret');
-    if (webhookSecret && signature) {
-      const expectedSig = crypto
-        .createHmac('sha256', webhookSecret)
-        .update(rawBody)
-        .digest('hex');
-      if (signature !== `sha256=${expectedSig}`) {
-        throw new UnauthorizedException('Signature FedaPay invalide');
-      }
+    if (!webhookSecret) {
+      this.logger.error('FEDAPAY_WEBHOOK_SECRET manquant — callback rejeté');
+      throw new UnauthorizedException('Webhook non configuré');
+    }
+    if (!rawBody?.length || !signature) {
+      throw new UnauthorizedException('Signature FedaPay manquante');
+    }
+    if (!this.verifyFedaPaySignature(rawBody, signature, webhookSecret)) {
+      throw new UnauthorizedException('Signature FedaPay invalide');
     }
 
     try {
@@ -416,6 +418,38 @@ export class PaymentsService {
     } catch (error) {
       this.logger.error('FedaPay callback error:', error.message);
     }
+  }
+
+  // Formats de signature acceptés :
+  //  - officiel FedaPay (style Stripe) : "t=<timestamp>,s=<hex>" — HMAC-SHA256 de "<t>.<body>"
+  //  - legacy : "sha256=<hex>" ou "<hex>" — HMAC-SHA256 du body seul
+  private verifyFedaPaySignature(rawBody: Buffer, signature: string, secret: string): boolean {
+    const safeEqualHex = (a: string, b: string): boolean => {
+      const ba = Buffer.from(a, 'utf8');
+      const bb = Buffer.from(b, 'utf8');
+      return ba.length === bb.length && crypto.timingSafeEqual(ba, bb);
+    };
+
+    if (signature.includes('t=')) {
+      const parts = new Map(
+        signature.split(',').map((p) => {
+          const idx = p.indexOf('=');
+          return [p.slice(0, idx).trim(), p.slice(idx + 1).trim()] as [string, string];
+        }),
+      );
+      const t = parts.get('t');
+      const s = parts.get('s');
+      if (!t || !s) return false;
+      const expected = crypto
+        .createHmac('sha256', secret)
+        .update(`${t}.${rawBody.toString('utf8')}`)
+        .digest('hex');
+      return safeEqualHex(s, expected);
+    }
+
+    const provided = signature.replace(/^sha256=/, '');
+    const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
+    return safeEqualHex(provided, expected);
   }
 
   // ─── HELPERS ─────────────────────────────────────────────────────────────────

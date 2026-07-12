@@ -37,12 +37,17 @@ async function bootstrap() {
   app.use(compression());
 
   // ─── CORS ────────────────────────────────────────────────────────────────────
+  // En production : uniquement FRONTEND_URL. localhost réservé au développement.
+  const corsOrigins =
+    process.env.NODE_ENV === 'production'
+      ? [process.env.FRONTEND_URL].filter(Boolean)
+      : [
+          process.env.FRONTEND_URL || 'http://localhost:3000',
+          'http://localhost:3000',
+          'http://localhost:3001',
+        ];
   app.enableCors({
-    origin: [
-      process.env.FRONTEND_URL || 'http://localhost:3000',
-      'http://localhost:3000',
-      'http://localhost:3001',
-    ],
+    origin: corsOrigins,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept-Language'],
