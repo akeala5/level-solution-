@@ -36,6 +36,7 @@ import { EscrowReleaseJob } from './common/jobs/escrow-release.job';
 import { SubscriptionExpiryJob } from './common/jobs/subscription-expiry.job';
 import { AuctionCloseJob } from './common/jobs/auction-close.job';
 import { SearchAlertsJob } from './common/jobs/search-alerts.job';
+import { StockReservationJob } from './common/jobs/stock-reservation.job';
 
 @Module({
   imports: [
@@ -101,6 +102,7 @@ import { SearchAlertsJob } from './common/jobs/search-alerts.job';
     SubscriptionExpiryJob,
     AuctionCloseJob,
     SearchAlertsJob,
+    StockReservationJob,
   ],
 })
 export class AppModule {}

@@ -91,6 +91,12 @@ export class PaymentsService {
       throw new BadRequestException(`Webhook signature invalide: ${err.message}`);
     }
 
+    // Idempotence : un événement Stripe rejoué n'est traité qu'une seule fois.
+    if (!(await this.registerWebhookEvent('STRIPE', event.id))) {
+      this.logger.warn(`Webhook Stripe déjà traité: ${event.id}`);
+      return { received: true, duplicate: true };
+    }
+
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;
@@ -402,21 +408,42 @@ export class PaymentsService {
     try {
       const data = JSON.parse(rawBody.toString('utf8'));
       const { transaction } = data;
-      if (!transaction) return;
+      if (!transaction?.id) return { received: true };
+
+      // Idempotence : un même événement (id + statut) rejoué par FedaPay
+      // n'est traité qu'une seule fois.
+      const eventKey = `${transaction.id}:${transaction.status}`;
+      if (!(await this.registerWebhookEvent('FEDAPAY', eventKey))) {
+        this.logger.warn(`Webhook FedaPay déjà traité: ${eventKey}`);
+        return { received: true, duplicate: true };
+      }
 
       // Récupère TOUS les paiements liés à ce providerRef (cas multi-commandes)
       const payments = await this.prisma.payment.findMany({
         where: { providerRef: String(transaction.id) },
       });
-      if (!payments.length) return;
+      if (!payments.length) return { received: true };
 
       if (transaction.status === 'approved') {
         await Promise.all(payments.map((p) => this.confirmPayment(p.orderId, String(transaction.id))));
-      } else if (['declined', 'cancelled'].includes(transaction.status)) {
+      } else if (['declined', 'canceled', 'cancelled'].includes(transaction.status)) {
         await Promise.all(payments.map((p) => this.failPayment(p.orderId)));
       }
+      return { received: true };
     } catch (error) {
       this.logger.error('FedaPay callback error:', error.message);
+      return { received: true };
+    }
+  }
+
+  // Enregistre un événement webhook ; retourne false s'il a déjà été vu
+  // (contrainte @@unique(provider, eventKey) → doublon rejeté silencieusement).
+  private async registerWebhookEvent(provider: string, eventKey: string): Promise<boolean> {
+    try {
+      await this.prisma.webhookEvent.create({ data: { provider, eventKey } });
+      return true;
+    } catch {
+      return false;
     }
   }
 
@@ -499,17 +526,22 @@ export class PaymentsService {
   }
 
   private async confirmPayment(orderId: string, providerRef: string) {
-    await this.prisma.$transaction([
-      this.prisma.payment.update({
-        where: { orderId },
-        data: { status: 'COMPLETED', providerRef },
-      }),
-      this.prisma.order.update({
-        where: { id: orderId },
-        data: { status: 'PAYMENT_CONFIRMED' },
-      }),
-    ]);
-    this.logger.log(`Paiement confirmé pour commande ${orderId}`);
+    // Garde d'idempotence : ne confirme QUE si le paiement est encore PENDING.
+    // Un rejeu (webhook dupliqué) ne repasse pas COMPLETED → COMPLETED.
+    const res = await this.prisma.payment.updateMany({
+      where: { orderId, status: 'PENDING' },
+      data: { status: 'COMPLETED', providerRef },
+    });
+    if (res.count === 0) {
+      this.logger.warn(`confirmPayment ignoré (déjà traité) order=${orderId}`);
+      return;
+    }
+    // La commande ne bascule que depuis PENDING (transition unique gardée).
+    await this.prisma.order.updateMany({
+      where: { id: orderId, status: 'PENDING' },
+      data: { status: 'PAYMENT_CONFIRMED' },
+    });
+    this.logger.log(`Paiement confirmé (idempotent) order=${orderId}`);
   }
 
   private async failPayment(orderId: string) {

@@ -12,6 +12,10 @@ import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class OrdersService {
+  // Durée de vie d'une réservation de stock avant restauration automatique.
+  // 30 min : marge confortable pour les confirmations Mobile Money (souvent retardées).
+  static readonly RESERVATION_TTL_MS = 30 * 60 * 1000;
+
   constructor(
     private prisma: PrismaService,
     private notifications: NotificationsService,
@@ -60,7 +64,8 @@ export class OrdersService {
     };
     const sellerPlan = product.seller.subscription?.plan || 'FREE';
     const commissionRate = commissionRates[sellerPlan] ?? 0.05;
-    const commissionAmount = totalAmount * commissionRate;
+    // Commission sur le sous-total uniquement (les frais de port ne sont pas commissionnés)
+    const commissionAmount = subtotal * commissionRate;
     const sellerAmount = totalAmount - commissionAmount;
 
     const order = await this.prisma.$transaction(async (tx) => {
@@ -93,10 +98,26 @@ export class OrdersService {
         },
       });
 
-      // Réduire le stock
-      await tx.product.update({
-        where: { id: product.id },
+      // Décrément CONDITIONNEL atomique : échoue si le stock est devenu
+      // insuffisant entre-temps (deux achats simultanés du dernier exemplaire
+      // → un seul passe), sans race condition.
+      const dec = await tx.product.updateMany({
+        where: { id: product.id, quantity: { gte: quantity } },
         data: { quantity: { decrement: quantity } },
+      });
+      if (dec.count === 0) {
+        throw new BadRequestException('Stock insuffisant'); // rollback de la transaction
+      }
+
+      // Réservation expirable : si le paiement n'est pas finalisé, le cron
+      // restaurera ce stock et annulera la commande (voir stock-reservation.job.ts).
+      await tx.stockReservation.create({
+        data: {
+          productId: product.id,
+          orderId: newOrder.id,
+          quantity,
+          expiresAt: new Date(Date.now() + OrdersService.RESERVATION_TTL_MS),
+        },
       });
 
       return newOrder;
@@ -185,6 +206,11 @@ export class OrdersService {
             data: { quantity: { increment: item.quantity } },
           }),
         ),
+        // Clôturer les réservations liées pour éviter toute double-restauration par le cron
+        this.prisma.stockReservation.updateMany({
+          where: { orderId, releasedAt: null },
+          data: { releasedAt: new Date() },
+        }),
       ]);
       updated = results[0];
     } else {
