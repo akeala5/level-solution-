@@ -3,12 +3,34 @@
 @tailwind utilities;
 
 @layer base {
+  /* ── DESIGN TOKENS (dual scheme clair/sombre) ── */
+  :root {
+    --surface: 248 250 252;   /* fond de page   (#F8FAFC, identique à l'existant) */
+    --card:    255 255 255;   /* surfaces élevées (white) */
+    --fg:      30 41 59;      /* texte principal (#1E293B, identique à l'existant) */
+    --muted:   100 116 139;   /* texte secondaire (#64748B, identique à l'existant) */
+    --border:  226 232 240;   /* bordures (#E2E8F0, identique à l'existant) */
+  }
+  .dark {
+    --surface: 15 20 30;
+    --card:    24 31 46;
+    --fg:      243 244 246;
+    --muted:   156 163 175;
+    --border:  51 61 80;
+  }
+
   * { box-sizing: border-box; padding: 0; margin: 0; }
   html { scroll-behavior: smooth; }
   body {
     @apply bg-surface text-dark font-sans antialiased;
   }
   a { color: inherit; text-decoration: none; }
+
+  /* Accessibilité : anneau de focus visible au clavier, partout */
+  :focus-visible {
+    outline: 2px solid #4D7ECC;
+    outline-offset: 2px;
+  }
 }
 
 @layer components {
@@ -31,22 +53,22 @@
 
   /* ── BUTTONS ── */
   .btn-base {
-    @apply inline-flex items-center justify-center gap-2 font-semibold rounded-xl transition-all duration-200 cursor-pointer border-0 select-none;
+    @apply inline-flex items-center justify-center gap-2 font-semibold rounded-xl transition-colors duration-200 cursor-pointer border-0 select-none disabled:opacity-50 disabled:cursor-not-allowed;
   }
   .btn-primary {
-    @apply btn-base bg-primary text-white px-5 py-2.5 text-sm hover:bg-primary-600 active:scale-95 shadow-sm hover:shadow-md;
+    @apply btn-base bg-primary text-white px-5 py-2.5 text-sm hover:bg-primary-700;
   }
   .btn-accent {
-    @apply btn-base bg-accent text-white px-5 py-2.5 text-sm hover:bg-green-700 active:scale-95 shadow-sm;
+    @apply btn-base bg-accent text-white px-5 py-2.5 text-sm hover:bg-accent-600;
   }
   .btn-ghost {
-    @apply btn-base bg-transparent text-dark px-4 py-2.5 text-sm hover:bg-gray-100 active:scale-95;
+    @apply btn-base bg-transparent text-dark px-4 py-2.5 text-sm hover:bg-fg/5;
   }
   .btn-outline {
-    @apply btn-base border border-primary text-primary bg-transparent px-5 py-2.5 text-sm hover:bg-primary hover:text-white active:scale-95;
+    @apply btn-base border border-primary text-primary bg-transparent px-5 py-2.5 text-sm hover:bg-primary hover:text-white;
   }
   .btn-danger {
-    @apply btn-base bg-danger text-white px-5 py-2.5 text-sm hover:bg-red-600 active:scale-95;
+    @apply btn-base bg-danger text-white px-5 py-2.5 text-sm hover:bg-red-600;
   }
   .btn-sm {
     @apply !px-3 !py-1.5 !text-xs !rounded-lg;
@@ -55,21 +77,21 @@
     @apply !px-7 !py-3.5 !text-base !rounded-2xl;
   }
   .btn-icon {
-    @apply w-10 h-10 flex items-center justify-center rounded-xl transition-colors cursor-pointer;
+    @apply w-11 h-11 flex items-center justify-center rounded-xl transition-colors cursor-pointer;
   }
 
   /* ── CARDS ── */
   .card {
-    @apply bg-white rounded-2xl border border-border shadow-card overflow-hidden;
+    @apply bg-card rounded-2xl border border-border shadow-card overflow-hidden;
   }
   .card-hover {
-    @apply bg-white rounded-2xl border border-border shadow-card overflow-hidden transition-all duration-300 hover:shadow-card-hover hover:-translate-y-1;
+    @apply bg-card rounded-2xl border border-border shadow-card overflow-hidden transition-shadow duration-300 hover:shadow-card-hover;
   }
 
   /* ── INPUTS ── */
   .input {
-    @apply w-full px-4 py-2.5 text-sm bg-white border border-border rounded-xl outline-none transition-all
-           focus:border-primary focus:ring-2 focus:ring-primary/10 placeholder:text-muted;
+    @apply w-full px-4 py-2.5 text-sm bg-card text-dark border border-border rounded-xl outline-none transition-colors
+           focus:border-primary-400 focus:ring-2 focus:ring-primary-400/20 placeholder:text-muted;
   }
   .input-error {
     @apply border-danger focus:border-danger focus:ring-danger/10;
@@ -77,18 +99,18 @@
 
   /* ── BADGES ── */
   .badge {
-    @apply inline-flex items-center gap-0.5 font-semibold rounded-full text-[10px] px-2 py-0.5;
+    @apply inline-flex items-center gap-0.5 font-semibold rounded-full text-[10px] px-2 py-0.5 whitespace-nowrap;
   }
-  .badge-success  { @apply bg-green-100  text-green-700; }
-  .badge-primary  { @apply bg-blue-100   text-blue-700; }
-  .badge-warning  { @apply bg-amber-100  text-amber-700; }
-  .badge-danger   { @apply bg-red-100    text-red-700; }
-  .badge-accent   { @apply bg-green-100  text-green-700; }
-  .badge-gray     { @apply bg-gray-100   text-gray-600; }
+  .badge-success  { @apply bg-green-500/15 text-green-700 dark:text-green-300; }
+  .badge-primary  { @apply bg-primary-500/15 text-primary-600 dark:text-primary-300; }
+  .badge-warning  { @apply bg-amber-500/15 text-amber-700 dark:text-amber-300; }
+  .badge-danger   { @apply bg-red-500/15 text-red-700 dark:text-red-300; }
+  .badge-accent   { @apply bg-accent-500/15 text-accent-700 dark:text-accent-300; }
+  .badge-gray     { @apply bg-fg/10 text-muted; }
 
   /* ── PRODUCT IMAGE ── */
   .product-img {
-    @apply object-cover transition-transform duration-500 group-hover:scale-105;
+    @apply object-cover;
   }
 
   /* ── SECTION TITLES ── */
@@ -99,18 +121,15 @@
     @apply text-muted text-base mt-2;
   }
 
-  /* ── GRADIENTS (background) ── */
+  /* ── FONDS PLEINS (ex-gradients, aplats neutres) ── */
   .bg-gradient-primary {
-    background: linear-gradient(135deg, #1A3C6E 0%, #2563EB 100%);
+    background: #1A3C6E;
   }
   .bg-gradient-hero {
-    background: linear-gradient(135deg, #0F2447 0%, #1A3C6E 55%, #1D4ED8 100%);
+    background: #12294E;
   }
   .bg-gradient-accent {
-    background: linear-gradient(135deg, #27AE60 0%, #1A8C4E 100%);
-  }
-  .shadow-glow {
-    box-shadow: 0 0 32px rgba(39, 174, 96, 0.35);
+    background: #1A8C4E;
   }
 }
 
@@ -126,8 +145,24 @@
     display: -webkit-box; -webkit-line-clamp: 3;
     -webkit-box-orient: vertical; overflow: hidden;
   }
-  @keyframes bounceSoft {
-    0%, 100% { transform: translateY(0px); }
-    50%       { transform: translateY(-8px); }
-  }
 }
+
+/* ── DARK SCHEME : override des utilitaires ad hoc ──
+   Les pages historiques utilisent bg-white / text-gray-* / border-gray-* en dur
+   (211 occurrences). Plutôt que retoucher 68 fichiers, on remappe ces
+   utilitaires vers les tokens quand .dark est actif (cf. astuce CSS globale). */
+.dark .bg-white        { background-color: rgb(var(--card)) !important; }
+.dark .bg-gray-50      { background-color: rgb(var(--surface)) !important; }
+.dark .bg-gray-100     { background-color: rgb(var(--border) / 0.5) !important; }
+.dark .text-gray-900,
+.dark .text-gray-800   { color: rgb(var(--fg)) !important; }
+.dark .text-gray-700,
+.dark .text-gray-600,
+.dark .text-gray-500,
+.dark .text-gray-400   { color: rgb(var(--muted)) !important; }
+.dark .border-gray-100,
+.dark .border-gray-200,
+.dark .divide-gray-100 > *,
+.dark .divide-gray-200 > * { border-color: rgb(var(--border)) !important; }
+.dark .hover\:bg-gray-100:hover,
+.dark .hover\:bg-gray-50:hover { background-color: rgb(255 255 255 / 0.06) !important; }

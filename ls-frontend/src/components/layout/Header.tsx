@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import LanguageSwitcher from '../common/LanguageSwitcher'
+import ThemeToggle from '../common/ThemeToggle'
 import { useAuthStore } from '@/store/auth.store'
 import { useCartStore } from '@/store/cart.store'
 import { cn, initials } from '@/lib/utils'
@@ -337,6 +338,7 @@ export default function Header() {
 
             {/* Actions */}
             <div className="flex items-center gap-1">
+              <ThemeToggle className="hidden md:flex" />
               <Link href="/cart" aria-label={cartCount > 0 ? t('cart_count', { count: cartCount }) : t('cart')} className="relative btn-icon text-dark hover:bg-gray-100">
                 <ShoppingCart size={20} aria-hidden="true" />
                 {cartCount > 0 && (
@@ -448,6 +450,10 @@ export default function Header() {
                   </button>
                 </div>
               </form>
+              <div className="flex items-center justify-between px-3 py-1.5 mb-3 rounded-xl bg-gray-50">
+                <span className="text-sm font-medium text-dark">Thème</span>
+                <ThemeToggle />
+              </div>
               {categoryGroups.map((group) => {
                 const Icon = group.icon
                 return (
