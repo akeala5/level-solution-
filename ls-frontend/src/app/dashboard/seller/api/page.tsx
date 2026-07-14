@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { useConfirm } from '@/components/ui'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Key, Plus, Trash2, Copy, Eye, EyeOff, AlertTriangle, CheckCircle, Loader2, Shield } from 'lucide-react'
@@ -19,6 +20,7 @@ interface ApiKey {
 
 export default function ApiKeysPage() {
   const qc = useQueryClient()
+  const confirmDialog = useConfirm()
   const [newKeyName, setNewKeyName] = useState('')
   const [createdKey, setCreatedKey] = useState<string | null>(null)
   const [showKey, setShowKey] = useState(false)
@@ -170,7 +172,9 @@ export default function ApiKeysPage() {
                   </div>
                   {k.isActive && (
                     <button
-                      onClick={() => { if (confirm('Révoquer cette clé ?')) revokeMutation.mutate(k.id) }}
+                      onClick={async () => {
+                        if (await confirmDialog({ title: 'Révoquer cette clé ?', message: 'Les intégrations qui l\'utilisent cesseront de fonctionner immédiatement.', confirmLabel: 'Révoquer' })) revokeMutation.mutate(k.id)
+                      }}
                       className="w-8 h-8 rounded-lg bg-red-50 text-red-400 hover:bg-red-100 flex items-center justify-center"
                     >
                       <Trash2 size={13} />

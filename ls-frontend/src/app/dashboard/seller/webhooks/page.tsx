@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { useConfirm } from '@/components/ui'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -42,6 +43,7 @@ interface Delivery {
 
 export default function WebhooksPage() {
   const qc = useQueryClient()
+  const confirmDialog = useConfirm()
   const [showCreate, setShowCreate] = useState(false)
   const [newUrl, setNewUrl] = useState('')
   const [newEvents, setNewEvents] = useState<string[]>([])
@@ -235,7 +237,9 @@ export default function WebhooksPage() {
                         <RefreshCw size={12} />
                       </button>
                       <button
-                        onClick={() => { if (confirm('Supprimer cet endpoint ?')) deleteMutation.mutate(ep.id) }}
+                        onClick={async () => {
+                          if (await confirmDialog({ title: 'Supprimer cet endpoint ?', message: 'Les notifications vers cette URL cesseront immédiatement.', confirmLabel: 'Supprimer' })) deleteMutation.mutate(ep.id)
+                        }}
                         className="w-8 h-8 rounded-lg bg-red-50 text-red-400 hover:bg-red-100 flex items-center justify-center"
                       >
                         <Trash2 size={12} />
