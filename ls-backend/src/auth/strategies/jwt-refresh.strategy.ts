@@ -6,6 +6,9 @@ import { Request } from 'express';
 import { PrismaService } from '../../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 
+// Cookie httpOnly prioritaire, champ de body conservé en secours (rétrocompat).
+const refreshCookieExtractor = (req: Request): string | null => req?.cookies?.refreshToken ?? null;
+
 @Injectable()
 export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh') {
   constructor(
@@ -13,7 +16,10 @@ export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh'
     private prisma: PrismaService,
   ) {
     super({
-      jwtFromRequest: ExtractJwt.fromBodyField('refreshToken'),
+      jwtFromRequest: ExtractJwt.fromExtractors([
+        refreshCookieExtractor,
+        ExtractJwt.fromBodyField('refreshToken'),
+      ]),
       ignoreExpiration: false,
       secretOrKey: configService.get('jwt.refreshSecret'),
       passReqToCallback: true,
@@ -21,7 +27,7 @@ export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh'
   }
 
   async validate(req: Request, payload: any) {
-    const refreshToken = req.body?.refreshToken;
+    const refreshToken = req.cookies?.refreshToken ?? req.body?.refreshToken;
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
       select: { id: true, email: true, role: true, refreshToken: true, isSuspended: true },
