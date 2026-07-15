@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import Image from 'next/image'
 import Link from 'next/link'
 import {
-  Heart, Share2, Flag, ChevronLeft, ChevronRight, Star, MapPin, Package,
+  Heart, Share2, ChevronLeft, ChevronRight, Star, MapPin, Package,
   Truck, Shield, MessageSquare, ShoppingCart, Zap, Check, ChevronDown,
   User, Calendar, Eye, Award, RefreshCw, Loader2, X, ZoomIn, Layers
 } from 'lucide-react'
@@ -536,11 +536,6 @@ export default function ProductDetailPage() {
                   </div>
                 </div>
               )}
-
-              {/* Report */}
-              <button className="flex items-center gap-1.5 text-xs text-muted hover:text-danger transition-colors mx-auto">
-                <Flag size={12} /> Signaler cette annonce
-              </button>
             </div>
           </div>
 
