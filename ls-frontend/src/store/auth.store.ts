@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { User } from '@/types'
-import { clearTokens, setTokens } from '@/lib/api'
+import api, { clearTokens, setTokens } from '@/lib/api'
 
 interface AuthState {
   user: User | null
@@ -31,6 +31,9 @@ export const useAuthStore = create<AuthState>()(
         set({ user, isAuthenticated: true })
       },
       logout: () => {
+        // Invalide la session côté serveur : efface les cookies httpOnly
+        // + annule le refreshToken en base. Fire-and-forget (redirect immédiat côté appelant).
+        api.post('/auth/logout').catch(() => {})
         clearTokens()
         set({ user: null, isAuthenticated: false })
       },

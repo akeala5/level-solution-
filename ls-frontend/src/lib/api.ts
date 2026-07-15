@@ -7,34 +7,23 @@ export const api = axios.create({
   baseURL: API_URL,
   headers: { 'Content-Type': 'application/json' },
   timeout: 10000,
+  withCredentials: true, // envoie/reçoit les cookies httpOnly d'auth (même origine)
 })
 
-// Inject token
-api.interceptors.request.use((config) => {
-  const token = Cookies.get('accessToken')
-  if (token) config.headers.Authorization = `Bearer ${token}`
-  return config
-})
-
-// Auto refresh on 401
+// Auto refresh on 401 — le refreshToken httpOnly part automatiquement (cookie).
+// On n'intercepte pas les 401 des routes /auth/* (ex. mauvais identifiants au login).
 api.interceptors.response.use(
   (res) => res,
   async (error) => {
     const original = error.config
-    if (error.response?.status === 401 && !original._retry) {
+    const isAuthRoute = original?.url?.includes('/auth/')
+    if (error.response?.status === 401 && !original._retry && !isAuthRoute) {
       original._retry = true
       try {
-        const refreshToken = Cookies.get('refreshToken')
-        if (!refreshToken) throw new Error('No refresh token')
-        const { data } = await axios.post(`${API_URL}/auth/refresh`, { refreshToken })
-        const { accessToken, refreshToken: newRefresh } = data.data
-        Cookies.set('accessToken', accessToken, { expires: 1 })
-        Cookies.set('refreshToken', newRefresh, { expires: 7 })
-        original.headers.Authorization = `Bearer ${accessToken}`
-        return api(original)
+        await axios.post(`${API_URL}/auth/refresh`, {}, { withCredentials: true })
+        return api(original) // le nouveau cookie httpOnly est déjà posé par le backend
       } catch {
-        Cookies.remove('accessToken')
-        Cookies.remove('refreshToken')
+        clearTokens()
         if (typeof window !== 'undefined') {
           window.location.href = '/auth/login'
         }
@@ -44,11 +33,12 @@ api.interceptors.response.use(
   }
 )
 
-export const setTokens = (accessToken: string, refreshToken: string) => {
-  Cookies.set('accessToken', accessToken, { expires: 1, secure: true, sameSite: 'strict' })
-  Cookies.set('refreshToken', refreshToken, { expires: 7, secure: true, sameSite: 'strict' })
-}
+// Les tokens sont désormais posés en cookies httpOnly par le backend
+// (login/register/refresh). setTokens devient un no-op, conservé pour compat d'appel.
+export const setTokens = (_accessToken?: string, _refreshToken?: string) => {}
 
+// Purge d'éventuels cookies JS hérités. Les cookies httpOnly, eux, sont effacés
+// côté serveur par POST /auth/logout (cf. auth.store.logout).
 export const clearTokens = () => {
   Cookies.remove('accessToken')
   Cookies.remove('refreshToken')

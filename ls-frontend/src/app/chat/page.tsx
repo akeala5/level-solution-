@@ -13,7 +13,6 @@ import { useAuthStore } from '@/store/auth.store'
 import { Conversation, Message } from '@/types'
 import { cn, timeAgo, initials } from '@/lib/utils'
 import api from '@/lib/api'
-import Cookies from 'js-cookie'
 import toast from 'react-hot-toast'
 
 let socket: Socket | null = null
@@ -42,12 +41,11 @@ function ChatContent() {
 
   // Init socket
   useEffect(() => {
-    const token = Cookies.get('accessToken')
-    if (!token) return
+    if (!isAuthenticated) return
 
     const wsBase = process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:3001'
     socket = io(`${wsBase}/chat`, {
-      auth: { token },
+      withCredentials: true, // le cookie httpOnly part dans le handshake (même origine)
       transports: ['websocket'],
     })
 
