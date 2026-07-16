@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, UnauthorizedException, Logger } from '@nestjs/common';
+import { Injectable, BadRequestException, UnauthorizedException, NotFoundException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import Stripe from 'stripe';
@@ -664,5 +664,139 @@ export class PaymentsService {
       take: 50,
     });
     return { message: 'Historique des paiements', data: orders };
+  }
+
+  // ─── REMBOURSEMENT (Lot 5A) ───────────────────────────────────────────────────
+  // Rembourse la commande à l'acheteur, de façon idempotente et « escrow-aware ».
+  // - Stripe  : vrai remboursement carte (refunds.create, idempotencyKey).
+  // - FedaPay / mobile money / autre : marqué REFUNDED, versement réel manuel (tracé).
+  // - Claw-back : si l'escrow a déjà été libéré au vendeur, on débite son wallet
+  //   (le solde peut devenir négatif = dette récupérée sur ventes futures).
+  // - Si l'escrow n'est pas encore libéré, on le neutralise pour que le vendeur ne
+  //   soit JAMAIS crédité pour cette commande remboursée.
+  async refundOrder(orderId: string, opts: { adminId?: string; reason?: string } = {}) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        payment: true,
+        buyer: { select: { id: true } },
+        seller: { select: { id: true } },
+      },
+    });
+    if (!order) throw new NotFoundException('Commande introuvable');
+    const payment = order.payment;
+    if (!payment) throw new BadRequestException('Aucun paiement à rembourser pour cette commande');
+
+    // Idempotence : déjà remboursé → no-op.
+    if (payment.refundedAt || payment.status === 'REFUNDED') {
+      return { message: 'Commande déjà remboursée', data: { alreadyRefunded: true } };
+    }
+    if (!['COMPLETED', 'DISPUTED'].includes(payment.status)) {
+      throw new BadRequestException(`Paiement non remboursable (statut ${payment.status})`);
+    }
+
+    const amount = payment.amount;
+    const isStripe = payment.method === 'STRIPE_CARD';
+    let providerRefundId: string | null = null;
+
+    // 1) Remboursement processeur AVANT le marquage DB.
+    //    L'idempotencyKey Stripe garantit qu'un retry (ou une course) ne rembourse jamais deux fois.
+    if (isStripe) {
+      if (!payment.providerRef) throw new BadRequestException('Référence Stripe manquante');
+      const session = await this.stripe.checkout.sessions.retrieve(payment.providerRef);
+      const paymentIntent = typeof session.payment_intent === 'string'
+        ? session.payment_intent
+        : session.payment_intent?.id;
+      if (!paymentIntent) throw new BadRequestException('PaymentIntent Stripe introuvable pour ce paiement');
+      const refund = await this.stripe.refunds.create(
+        { payment_intent: paymentIntent },
+        { idempotencyKey: `refund_${payment.id}` },
+      );
+      providerRefundId = refund.id;
+    }
+
+    // 2) Finalisation atomique + claw-back, gardée (idempotente même en concurrence).
+    const outcome = await this.prisma.$transaction(async (tx) => {
+      const claim = await tx.payment.updateMany({
+        where: { id: payment.id, refundedAt: null },
+        data: { status: 'REFUNDED', refundedAt: new Date(), refundAmount: amount },
+      });
+      if (claim.count === 0) return { alreadyRefunded: true, clawedBack: false };
+
+      await tx.order.updateMany({ where: { id: order.id }, data: { status: 'REFUNDED' } });
+
+      let clawedBack = false;
+      if (payment.escrowReleasedAt) {
+        // Escrow déjà libéré → reprendre au vendeur (solde peut devenir négatif).
+        await tx.sellerWallet.upsert({
+          where: { sellerId: order.sellerId },
+          update: { balance: { decrement: order.sellerAmount } },
+          create: { sellerId: order.sellerId, balance: -order.sellerAmount },
+        });
+        await tx.walletTransaction.create({
+          data: {
+            sellerId: order.sellerId,
+            orderId: order.id,
+            type: 'REFUND_DEBIT',
+            amount: order.sellerAmount,
+            label: `Remboursement ${order.orderNumber}`,
+          },
+        });
+        clawedBack = true;
+      } else {
+        // Escrow pas encore libéré → neutraliser pour que le vendeur ne soit jamais crédité.
+        await tx.payment.updateMany({
+          where: { id: payment.id, escrowReleasedAt: null },
+          data: { escrowReleasedAt: new Date() },
+        });
+      }
+      return { alreadyRefunded: false, clawedBack };
+    });
+
+    if (outcome.alreadyRefunded) {
+      return { message: 'Commande déjà remboursée', data: { alreadyRefunded: true } };
+    }
+
+    // 3) Notifications (inline, pas de dépendance module supplémentaire).
+    const manual = !isStripe;
+    await this.prisma.notification.create({
+      data: {
+        userId: order.buyerId,
+        type: 'SYSTEM',
+        title: 'Remboursement de votre commande',
+        body: manual
+          ? `Votre commande #${order.orderNumber} a été remboursée (${amount.toLocaleString()} XOF). Le versement Mobile Money est en cours de traitement.`
+          : `Votre commande #${order.orderNumber} a été remboursée (${amount.toLocaleString()} XOF) sur votre moyen de paiement.`,
+        data: { orderId: order.id },
+      },
+    });
+    await this.prisma.notification.create({
+      data: {
+        userId: order.sellerId,
+        type: 'SYSTEM',
+        title: 'Commande remboursée',
+        body: `La commande #${order.orderNumber} a été remboursée à l'acheteur.${outcome.clawedBack ? ` Le montant vendeur (${order.sellerAmount.toLocaleString()} XOF) a été repris sur votre portefeuille.` : ''}`,
+        data: { orderId: order.id },
+      },
+    });
+
+    this.logger.log(
+      `Refund commande ${order.orderNumber} (${amount} XOF, ${payment.method}, manual=${manual}, clawback=${outcome.clawedBack})` +
+      (opts.adminId ? ` par admin ${opts.adminId}` : ''),
+    );
+
+    return {
+      message: manual
+        ? 'Remboursement enregistré (versement Mobile Money à effectuer manuellement)'
+        : 'Remboursement effectué',
+      data: {
+        orderId: order.id,
+        amount,
+        method: payment.method,
+        manual,
+        clawedBack: outcome.clawedBack,
+        providerRefundId,
+      },
+    };
   }
 }

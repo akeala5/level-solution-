@@ -190,6 +190,18 @@ export class AdminController {
     return this.adminService.rejectEscrowPayment(ref, body.reason, adminId);
   }
 
+  @Post('orders/:id/refund')
+  @HttpCode(HttpStatus.OK)
+  @Roles('ADMIN')
+  @ApiOperation({ summary: "Rembourser une commande (Stripe réel / FedaPay manuel, claw-back escrow)" })
+  refundOrder(
+    @Param('id') id: string,
+    @Body() body: { reason?: string },
+    @CurrentUser('id') adminId: string,
+  ) {
+    return this.adminService.refundOrder(id, adminId, body?.reason);
+  }
+
   // ─── TRANSACTIONS ──────────────────────────────────────────────────────────────
 
   @Get('payments')
