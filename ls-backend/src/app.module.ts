@@ -27,6 +27,7 @@ import { SponsoredAdsModule } from './sponsored-ads/sponsored-ads.module';
 import { ReferralsModule } from './referrals/referrals.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { WalletModule } from './wallet/wallet.module';
+import { ReportsModule } from './reports/reports.module';
 
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -93,6 +94,7 @@ import { StockReservationJob } from './common/jobs/stock-reservation.job';
     ReferralsModule,
     WebhooksModule,
     WalletModule,
+    ReportsModule,
   ],
   controllers: [HealthController],
   providers: [

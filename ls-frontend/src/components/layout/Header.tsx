@@ -14,7 +14,7 @@ import {
   Wrench, Tractor, Hammer, Music, Gamepad2,
   Leaf, Sun, Stethoscope, GraduationCap, Briefcase,
   Building2, Fish, PawPrint, Plane, Gem, Gavel,
-  Wallet, Banknote,
+  Wallet, Banknote, Flag,
 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import LanguageSwitcher from '../common/LanguageSwitcher'
@@ -392,7 +392,10 @@ export default function Header() {
                               { icon: MessageSquare,   label: t('messages'),  href: '/chat' },
                               { icon: Settings,        label: t('settings'),  href: '/profile' },
                               ...(['ADMIN', 'MODERATOR'].includes(user?.role || '')
-                                ? [{ icon: Banknote, label: 'Retraits', href: '/admin/payouts' }]
+                                ? [
+                                    { icon: Banknote, label: 'Retraits', href: '/admin/payouts' },
+                                    { icon: Flag, label: 'Signalements', href: '/admin/reports' },
+                                  ]
                                 : []),
                             ].map(({ icon: Icon, label, href }) => (
                               <Link key={href} href={href} onClick={() => setUserMenuOpen(false)}
@@ -492,7 +495,10 @@ export default function Header() {
                     { label: t('orders'),    href: '/dashboard/buyer' },
                     { label: t('settings'),  href: '/profile' },
                     ...(['ADMIN', 'MODERATOR'].includes(user?.role || '')
-                      ? [{ label: 'Retraits', href: '/admin/payouts' }]
+                      ? [
+                          { label: 'Retraits', href: '/admin/payouts' },
+                          { label: 'Signalements', href: '/admin/reports' },
+                        ]
                       : []),
                   ].map(({ label, href }) => (
                     <Link key={href} href={href} onClick={() => setMobileOpen(false)}

@@ -176,6 +176,7 @@ model User {
   webhookEndpoints  WebhookEndpoint[]
   sellerWallet      SellerWallet?
   payoutRequests    PayoutRequest[]
+  reports           Report[]            @relation("ReportReporter")
 
   @@map("users")
 }
@@ -730,6 +731,52 @@ model Dispute {
   initiator    User          @relation("DisputeInitiator", fields: [initiatorId], references: [id])
 
   @@map("disputes")
+}
+
+// ─── SIGNALEMENTS / MODERATION ────────────────────────────────────────────────
+
+model Report {
+  id          String           @id @default(uuid())
+  reporterId  String
+  targetType  ReportTargetType
+  targetId    String
+  reason      ReportReason
+  description String?
+  status      ReportStatus     @default(PENDING)
+  resolution  String?
+  handledBy   String?
+  handledAt   DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  reporter    User             @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([targetType, targetId])
+  @@index([reporterId])
+  @@map("reports")
+}
+
+enum ReportTargetType {
+  PRODUCT
+  USER
+  REVIEW
+}
+
+enum ReportReason {
+  SCAM
+  COUNTERFEIT
+  PROHIBITED
+  OFFENSIVE
+  SPAM
+  OTHER
+}
+
+enum ReportStatus {
+  PENDING
+  REVIEWING
+  ACTIONED
+  DISMISSED
 }
 
 // ─── FAVORIS ──────────────────────────────────────────────────────────────────

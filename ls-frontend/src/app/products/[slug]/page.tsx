@@ -21,6 +21,7 @@ import { useCartStore } from '@/store/cart.store'
 import { Product, Review } from '@/types'
 import { cn, formatPrice, timeAgo, getConditionLabel, imgBlurDataURL } from '@/lib/utils'
 import ProductCard from '@/components/product/ProductCard'
+import ReportProductButton from '@/components/product/ReportProductButton'
 import { useRecentlyViewed } from '@/hooks/useRecentlyViewed'
 
 const CONDITION_COLORS: Record<string, string> = {
@@ -272,6 +273,9 @@ export default function ProductDetailPage() {
                     {showFullDesc ? 'Voir moins' : 'Voir plus'} <ChevronDown size={12} className={cn('transition-transform', showFullDesc && 'rotate-180')} />
                   </button>
                 )}
+                <div className="mt-4 pt-3 border-t border-border/50">
+                  <ReportProductButton productId={product.id} />
+                </div>
 
                 {/* Tags */}
                 {product.tags?.length > 0 && (
