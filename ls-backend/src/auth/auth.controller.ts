@@ -66,9 +66,9 @@ export class AuthController {
   @ApiResponse({ status: 201, description: 'Compte créé avec succès' })
   @ApiResponse({ status: 409, description: 'Email ou téléphone déjà utilisé' })
   async register(@Body() dto: RegisterDto, @Res({ passthrough: true }) res: Response) {
-    const result = await this.authService.register(dto);
-    this.setAuthCookies(res, result?.data as any);
-    return result;
+    const { tokens, ...body } = await this.authService.register(dto);
+    this.setAuthCookies(res, tokens); // tokens jamais renvoyés dans le corps
+    return body;
   }
 
   @Public()
@@ -79,10 +79,10 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Connexion réussie' })
   @ApiResponse({ status: 401, description: 'Identifiants invalides' })
   async login(@Body() dto: LoginDto, @Ip() ip: string, @Res({ passthrough: true }) res: Response) {
-    const result = await this.authService.login(dto, ip);
-    // Cas 2FA-pending : result.data ne contient pas de tokens → setAuthCookies no-op.
-    this.setAuthCookies(res, result?.data as any);
-    return result;
+    // Cas 2FA-pending : le service ne renvoie pas de champ `tokens` → setAuthCookies no-op.
+    const { tokens, ...body } = await this.authService.login(dto, ip) as any;
+    this.setAuthCookies(res, tokens); // tokens jamais renvoyés dans le corps
+    return body;
   }
 
   @Public()
@@ -92,8 +92,8 @@ export class AuthController {
   @ApiOperation({ summary: 'Rafraîchir le token JWT' })
   async refresh(@CurrentUser() user: any, @Res({ passthrough: true }) res: Response) {
     const tokens = await this.authService.refreshTokens(user.id, user.email, user.role);
-    this.setAuthCookies(res, tokens);
-    return tokens;
+    this.setAuthCookies(res, tokens); // rotation des cookies httpOnly
+    return { message: 'Session rafraîchie', data: null }; // aucun token dans le corps
   }
 
   @Post('logout')

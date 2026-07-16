@@ -1,5 +1,4 @@
 import axios from 'axios'
-import Cookies from 'js-cookie'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1'
 
@@ -33,15 +32,13 @@ api.interceptors.response.use(
   }
 )
 
-// Les tokens sont désormais posés en cookies httpOnly par le backend
-// (login/register/refresh). setTokens devient un no-op, conservé pour compat d'appel.
-export const setTokens = (_accessToken?: string, _refreshToken?: string) => {}
-
-// Purge d'éventuels cookies JS hérités. Les cookies httpOnly, eux, sont effacés
-// côté serveur par POST /auth/logout (cf. auth.store.logout).
+// Purge d'éventuels cookies JS *hérités* (non-httpOnly, posés avant la bascule).
+// Les cookies httpOnly actuels, eux, sont effacés côté serveur par POST /auth/logout
+// (cf. auth.store.logout) — inaccessibles au JS par conception.
 export const clearTokens = () => {
-  Cookies.remove('accessToken')
-  Cookies.remove('refreshToken')
+  if (typeof document === 'undefined') return
+  document.cookie = 'accessToken=; Max-Age=0; path=/'
+  document.cookie = 'refreshToken=; Max-Age=0; path=/'
 }
 
 export default api

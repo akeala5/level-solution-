@@ -98,12 +98,14 @@ export class AuthService {
 
     const tokens = await this.generateTokens(user.id, user.email, user.role);
 
+    // tokens : champ frère consommé UNIQUEMENT par le controller (pose des cookies
+    // httpOnly). Jamais renvoyé dans le corps HTTP (cf. auth.controller).
     return {
       message: 'Compte créé avec succès. Vérifiez votre email.',
       data: {
         user: this.sanitizeUser(user),
-        ...tokens,
       },
+      tokens,
     };
   }
 
@@ -160,8 +162,8 @@ export class AuthService {
           ...this.sanitizeUser(user),
           plan: user.subscription?.plan || 'FREE',
         },
-        ...tokens,
       },
+      tokens,
     };
   }
 

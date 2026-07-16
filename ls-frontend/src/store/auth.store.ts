@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { User } from '@/types'
-import api, { clearTokens, setTokens } from '@/lib/api'
+import api, { clearTokens } from '@/lib/api'
 
 interface AuthState {
   user: User | null
@@ -11,7 +11,7 @@ interface AuthState {
   setHasHydrated: (v: boolean) => void
   setUser: (user: User | null) => void
   setLoading: (v: boolean) => void
-  login: (user: User, accessToken: string, refreshToken: string) => void
+  login: (user: User) => void
   logout: () => void
   updateUser: (data: Partial<User>) => void
 }
@@ -26,8 +26,9 @@ export const useAuthStore = create<AuthState>()(
       setHasHydrated: (v) => set({ _hasHydrated: v }),
       setUser: (user) => set({ user, isAuthenticated: !!user }),
       setLoading: (isLoading) => set({ isLoading }),
-      login: (user, accessToken, refreshToken) => {
-        setTokens(accessToken, refreshToken)
+      // Les cookies httpOnly d'auth sont déjà posés par le backend (Set-Cookie).
+      // Le store ne conserve que l'identité utilisateur, jamais de token.
+      login: (user) => {
         set({ user, isAuthenticated: true })
       },
       logout: () => {

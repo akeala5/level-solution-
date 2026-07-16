@@ -41,7 +41,7 @@ export default function LoginPage() {
         return
       }
 
-      login(result.user, result.accessToken, result.refreshToken)
+      login(result.user)
       toast.success(`Bienvenue, ${result.user.firstName} !`)
       router.push('/dashboard')
     } catch (err: any) {
