@@ -61,7 +61,10 @@ export class AuthService {
           firstName: dto.firstName,
           lastName: dto.lastName,
           passwordHash,
-          role: dto.role || 'BUYER',
+          // Defense en profondeur : ne jamais assigner un role privilegie depuis
+          // l'inscription, meme si le DTO est contourne. Seul SELLER est opt-in ; tout
+          // le reste (ADMIN, MODERATOR, valeur inconnue) retombe sur BUYER.
+          role: dto.role === 'SELLER' ? 'SELLER' : 'BUYER',
           profile: { create: {} },
           subscription: { create: { plan: 'FREE' } },
           loyaltyAccount: { create: {} },

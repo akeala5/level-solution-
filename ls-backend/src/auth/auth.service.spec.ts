@@ -10,23 +10,45 @@ import * as bcrypt from 'bcrypt';
 const mockPrisma = {
   user: {
     findUnique: jest.fn(),
+    findFirst: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
   },
+  referral: {
+    findFirst: jest.fn(),
+    // create est chaîné avec .catch() dans le service → doit renvoyer une promesse.
+    create: jest.fn().mockResolvedValue({}),
+    update: jest.fn().mockResolvedValue({}),
+  },
+  otpToken: {
+    deleteMany: jest.fn(),
+    create: jest.fn(),
+    findFirst: jest.fn(),
+    update: jest.fn(),
+  },
   auditLog: { create: jest.fn() },
+  $transaction: jest.fn(),
 };
+// $transaction : exécute le callback avec le client mocké (register), ou résout le tableau (verifyEmail).
+mockPrisma.$transaction.mockImplementation((arg: any) =>
+  typeof arg === 'function' ? arg(mockPrisma) : Promise.all(arg),
+);
 
 const mockJwt = {
   sign: jest.fn().mockReturnValue('mock-token'),
+  signAsync: jest.fn().mockResolvedValue('mock-jwt'),
   verify: jest.fn(),
 };
 
 const mockConfig = {
   get: jest.fn((key: string) => {
     const vals: Record<string, any> = {
-      'jwt.accessSecret': 'test-secret',
+      'jwt.secret': 'test-secret',
+      'jwt.expiresIn': '15m',
       'jwt.refreshSecret': 'test-refresh-secret',
-      'encryption.key': undefined,
+      'jwt.refreshExpiresIn': '7d',
+      'otp.expiryMinutes': 15,
+      // 'encryption.*' non fourni → getEncryptionKey retombe sur le fallback dev.
     };
     return vals[key];
   }),
@@ -35,6 +57,7 @@ const mockConfig = {
 const mockNotifications = {
   sendWelcomeEmail: jest.fn(),
   sendPasswordResetEmail: jest.fn(),
+  sendEmailVerification: jest.fn(),
   createNotification: jest.fn(),
 };
 
@@ -60,7 +83,7 @@ describe('AuthService', () => {
 
   describe('register()', () => {
     it('doit créer un utilisateur avec mot de passe hashé', async () => {
-      mockPrisma.user.findUnique.mockResolvedValueOnce(null); // email libre
+      mockPrisma.user.findFirst.mockResolvedValueOnce(null); // email libre (register → findFirst)
       const createdUser = {
         id: 'user-1', email: 'test@test.com', firstName: 'Test', lastName: 'User',
         role: 'BUYER', isEmailVerified: false,
@@ -79,11 +102,16 @@ describe('AuthService', () => {
           data: expect.objectContaining({ email: 'test@test.com', role: 'BUYER' }),
         }),
       );
-      expect(result).toHaveProperty('accessToken');
+      // Contrat httpOnly (Lot 4D-3) : les tokens vivent dans `result.tokens`
+      // (consommés par le controller), jamais dans `result.data`.
+      expect(result).toHaveProperty('tokens.accessToken');
+      expect(result).toHaveProperty('tokens.refreshToken');
+      expect(result.data.user).toBeDefined();
+      expect(result.data).not.toHaveProperty('accessToken');
     });
 
     it('doit lancer ConflictException si email déjà utilisé', async () => {
-      mockPrisma.user.findUnique.mockResolvedValueOnce({ id: 'existing' });
+      mockPrisma.user.findFirst.mockResolvedValueOnce({ id: 'existing' });
 
       await expect(
         service.register({ email: 'taken@test.com', password: 'Password@123', firstName: 'A', lastName: 'B' }),
@@ -91,7 +119,7 @@ describe('AuthService', () => {
     });
 
     it('ne doit pas permettre d\'injecter le rôle ADMIN', async () => {
-      mockPrisma.user.findUnique.mockResolvedValueOnce(null);
+      mockPrisma.user.findFirst.mockResolvedValueOnce(null);
       mockPrisma.user.create.mockResolvedValueOnce({
         id: 'u1', email: 'attacker@test.com', firstName: 'X', lastName: 'Y',
         role: 'BUYER', isEmailVerified: false,
@@ -127,8 +155,10 @@ describe('AuthService', () => {
 
       const result = await service.login({ email: 'user@test.com', password: 'Password@123' });
 
-      expect(result).toHaveProperty('accessToken');
-      expect(result).toHaveProperty('refreshToken');
+      // Contrat httpOnly (Lot 4D-3) : tokens sous `result.tokens`, pas dans le corps `data`.
+      expect(result).toHaveProperty('tokens.accessToken');
+      expect(result).toHaveProperty('tokens.refreshToken');
+      expect(result.data).not.toHaveProperty('accessToken');
     });
 
     it('doit rejeter un mot de passe incorrect', async () => {
@@ -152,7 +182,9 @@ describe('AuthService', () => {
 
       const result = await service.login({ email: 'user@test.com', password: 'Password@123' });
 
-      expect(result).toHaveProperty('requiresTwoFactor', true);
+      // Le service renvoie l'indicateur 2FA-pending dans `data.requires2FA` (pas de tokens).
+      expect(result.data).toHaveProperty('requires2FA', true);
+      expect(result).not.toHaveProperty('tokens');
     });
   });
 
