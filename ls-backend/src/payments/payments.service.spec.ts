@@ -44,24 +44,9 @@ describe('PaymentsService', () => {
     jest.clearAllMocks();
   });
 
-  // ─── PAYS FEDAPAY ──────────────────────────────────────────────────────────────
-
-  describe('countryMap', () => {
-    it('doit mapper FEDAPAY_WAVE vers CI', () => {
-      const map = (service as any).countryMap;
-      expect(map['FEDAPAY_WAVE']).toBe('CI');
-    });
-
-    it('doit mapper FEDAPAY_TMONEY vers TG', () => {
-      const map = (service as any).countryMap;
-      expect(map['FEDAPAY_TMONEY']).toBe('TG');
-    });
-
-    it('doit mapper FEDAPAY_MOOV vers BJ', () => {
-      const map = (service as any).countryMap;
-      expect(map['FEDAPAY_MOOV']).toBe('BJ');
-    });
-  });
+  // NB : les anciens tests « countryMap » ont été retirés — la propriété a été
+  // supprimée lors d'un refactor (le pays vient désormais d'un paramètre explicite
+  // ou du préfixe du method, plus d'un map statique method→pays).
 
   // ─── WEBHOOK FEDAPAY ───────────────────────────────────────────────────────────
 

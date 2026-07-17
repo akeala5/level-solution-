@@ -1,7 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ProductsService } from './products.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { SearchService } from '../search/search.service';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 
 const mockPrisma = {
   product: {
@@ -15,7 +16,21 @@ const mockPrisma = {
   subscription: {
     findUnique: jest.fn(),
   },
+  review: {
+    findMany: jest.fn().mockResolvedValue([]),
+  },
+  favorite: {
+    findUnique: jest.fn().mockResolvedValue(null),
+  },
   $transaction: jest.fn((fn) => fn(mockPrisma)),
+};
+
+// Les méthodes d'indexation sont chaînées avec .catch() → doivent renvoyer une promesse.
+const mockSearch = {
+  indexProduct: jest.fn().mockResolvedValue(undefined),
+  deleteProduct: jest.fn().mockResolvedValue(undefined),
+  search: jest.fn().mockResolvedValue({ ids: [], total: 0 }),
+  bulkIndex: jest.fn().mockResolvedValue(undefined),
 };
 
 const PLAN_LIMITS: Record<string, number> = {
@@ -30,6 +45,7 @@ describe('ProductsService', () => {
       providers: [
         ProductsService,
         { provide: PrismaService, useValue: mockPrisma },
+        { provide: SearchService, useValue: mockSearch },
       ],
     }).compile();
 
@@ -53,7 +69,7 @@ describe('ProductsService', () => {
               categoryId: 'cat-1', condition: 'NEW', quantity: 1,
               country: 'TG', guarantee: 'NONE', hasDelivery: false, isNegotiable: false, isReconditioned: false,
             }, plan)
-          ).rejects.toThrow(BadRequestException);
+          ).rejects.toThrow(ForbiddenException); // limite de forfait dépassée → 403
         }
       });
     });
@@ -92,7 +108,7 @@ describe('ProductsService', () => {
 
   describe('Ownership — suppression/modification', () => {
     it('delete doit lever ForbiddenException si pas propriétaire', async () => {
-      mockPrisma.product.findFirst.mockResolvedValue({
+      mockPrisma.product.findUnique.mockResolvedValue({
         id: 'prod-1', sellerId: 'owner-1', status: 'PUBLISHED',
       });
 
@@ -101,7 +117,7 @@ describe('ProductsService', () => {
     });
 
     it('delete doit réussir pour le propriétaire', async () => {
-      mockPrisma.product.findFirst.mockResolvedValue({
+      mockPrisma.product.findUnique.mockResolvedValue({
         id: 'prod-1', sellerId: 'owner-1', status: 'PUBLISHED',
       });
       mockPrisma.product.update.mockResolvedValue({ id: 'prod-1', status: 'ARCHIVED' });
@@ -115,7 +131,7 @@ describe('ProductsService', () => {
     });
 
     it('ADMIN peut supprimer n\'importe quel produit', async () => {
-      mockPrisma.product.findFirst.mockResolvedValue({
+      mockPrisma.product.findUnique.mockResolvedValue({
         id: 'prod-1', sellerId: 'owner-1', status: 'PUBLISHED',
       });
       mockPrisma.product.update.mockResolvedValue({ id: 'prod-1', status: 'ARCHIVED' });
@@ -131,10 +147,10 @@ describe('ProductsService', () => {
     it('findOne doit incrémenter viewCount', async () => {
       const product = {
         id: 'prod-1', slug: 'test-product', sellerId: 'seller-1',
-        status: 'PUBLISHED', title: 'Test', price: 50000,
+        status: 'ACTIVE', title: 'Test', price: 50000,
         images: [], category: {}, seller: {}, tags: [],
       };
-      mockPrisma.product.findFirst.mockResolvedValue(product);
+      mockPrisma.product.findUnique.mockResolvedValue(product);
       mockPrisma.product.update.mockResolvedValue({ ...product, viewCount: 1 });
       mockPrisma.product.findMany.mockResolvedValue([]); // similar products
 
