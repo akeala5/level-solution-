@@ -98,6 +98,16 @@ export class OrdersController {
     return this.ordersService.openDispute(id, userId, data);
   }
 
+  @Post(':id/dispute/respond')
+  @ApiOperation({ summary: 'Répondre à un litige (vendeur de la commande)' })
+  respondToDispute(
+    @CurrentUser('id') userId: string,
+    @Param('id') id: string,
+    @Body() body: { response: string },
+  ) {
+    return this.ordersService.respondToDispute(id, userId, body.response);
+  }
+
   @UseGuards(RolesGuard)
   @Roles('ADMIN' as any)
   @Get('admin/all')

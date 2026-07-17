@@ -14,7 +14,7 @@ import {
   Wrench, Tractor, Hammer, Music, Gamepad2,
   Leaf, Sun, Stethoscope, GraduationCap, Briefcase,
   Building2, Fish, PawPrint, Plane, Gem, Gavel,
-  Wallet, Banknote, Flag,
+  Wallet, Banknote, Flag, Scale,
 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import LanguageSwitcher from '../common/LanguageSwitcher'
@@ -395,6 +395,7 @@ export default function Header() {
                                 ? [
                                     { icon: Banknote, label: 'Retraits', href: '/admin/payouts' },
                                     { icon: Flag, label: 'Signalements', href: '/admin/reports' },
+                                    { icon: Scale, label: 'Litiges', href: '/admin/disputes' },
                                   ]
                                 : []),
                             ].map(({ icon: Icon, label, href }) => (
@@ -498,6 +499,7 @@ export default function Header() {
                       ? [
                           { label: 'Retraits', href: '/admin/payouts' },
                           { label: 'Signalements', href: '/admin/reports' },
+                          { label: 'Litiges', href: '/admin/disputes' },
                         ]
                       : []),
                   ].map(({ label, href }) => (

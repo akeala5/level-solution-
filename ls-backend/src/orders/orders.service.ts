@@ -431,6 +431,32 @@ export class OrdersService {
     return { message: 'Litige ouvert', data: dispute };
   }
 
+  // Le vendeur de la commande répond au litige (sa version des faits, texte).
+  async respondToDispute(orderId: string, sellerId: string, response: string) {
+    if (!response || !response.trim()) throw new BadRequestException('Réponse vide');
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: { dispute: true },
+    });
+    if (!order) throw new NotFoundException('Commande introuvable');
+    if (order.sellerId !== sellerId) throw new ForbiddenException('Seul le vendeur de la commande peut répondre');
+    if (!order.dispute) throw new BadRequestException('Aucun litige ouvert sur cette commande');
+    if (['RESOLVED_BUYER', 'RESOLVED_SELLER', 'CLOSED'].includes(order.dispute.status)) {
+      throw new BadRequestException('Ce litige est déjà clôturé');
+    }
+
+    const updated = await this.prisma.dispute.update({
+      where: { orderId },
+      data: {
+        sellerResponse: response.trim(),
+        sellerRespondedAt: new Date(),
+        // La réponse du vendeur fait passer un litige OPEN en cours d'examen.
+        status: order.dispute.status === 'OPEN' ? 'IN_PROGRESS' : order.dispute.status,
+      },
+    });
+    return { message: 'Réponse enregistrée', data: updated };
+  }
+
   // ─── RÉCUPÉRER LES COMMANDES ──────────────────────────────────────────────────
 
   async getBuyerOrders(buyerId: string, page = 1, limit = 20) {

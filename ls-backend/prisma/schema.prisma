@@ -721,6 +721,8 @@ model Dispute {
   description  String
   evidenceUrls String[]
   status       DisputeStatus @default(OPEN)
+  sellerResponse    String?
+  sellerRespondedAt DateTime?
   resolution   String?
   resolvedBy   String?
   resolvedAt   DateTime?

@@ -108,6 +108,13 @@ export class AdminController {
     return this.adminService.getDisputes(page, limit, status);
   }
 
+  @Put('disputes/:id/in-progress')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Marquer un litige en cours d'examen" })
+  setDisputeInProgress(@Param('id') disputeId: string) {
+    return this.adminService.setDisputeInProgress(disputeId);
+  }
+
   @Put('disputes/:id/resolve')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Résoudre un litige (en faveur acheteur ou vendeur)' })
