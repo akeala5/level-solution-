@@ -83,7 +83,10 @@ export default () => ({
   },
 
   meilisearch: {
-    host: process.env.MEILISEARCH_HOST || 'http://localhost:7700',
+    // Pas de host par défaut : MEILISEARCH_HOST vide = recherche désactivée (opt-in).
+    // Un défaut localhost ferait croire au SearchService qu'il est actif et
+    // provoquerait des connexions échouées en boucle quand Meilisearch est absent.
+    host: process.env.MEILISEARCH_HOST || undefined,
     apiKey: process.env.MEILISEARCH_API_KEY || '',
   },
 
