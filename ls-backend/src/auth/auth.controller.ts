@@ -7,7 +7,9 @@ import {
   Ip,
   HttpCode,
   HttpStatus,
+  Res,
 } from '@nestjs/common';
+import type { Response, CookieOptions } from 'express';
 import { Throttle } from '@nestjs/throttler';
 import {
   ApiTags,
@@ -34,14 +36,39 @@ import { JwtRefreshGuard } from './guards/jwt-refresh.guard';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  // ─── COOKIES httpOnly (auth) ───────────────────────────────────────────────
+  // Même origine que le front (shop.lsgrouptogo.com) → cookie first-party,
+  // SameSite=Lax, host-only (pas de Domain élargi = aucune fuite inter-sous-domaines).
+  private readonly isProd = process.env.NODE_ENV === 'production';
+
+  private cookieBase(): CookieOptions {
+    return { httpOnly: true, secure: this.isProd, sameSite: 'lax', path: '/' };
+  }
+
+  private setAuthCookies(res: Response, tokens?: { accessToken?: string; refreshToken?: string }) {
+    if (tokens?.accessToken) {
+      res.cookie('accessToken', tokens.accessToken, { ...this.cookieBase(), maxAge: 24 * 60 * 60 * 1000 }); // 1 j
+    }
+    if (tokens?.refreshToken) {
+      res.cookie('refreshToken', tokens.refreshToken, { ...this.cookieBase(), maxAge: 7 * 24 * 60 * 60 * 1000 }); // 7 j
+    }
+  }
+
+  private clearAuthCookies(res: Response) {
+    res.clearCookie('accessToken', this.cookieBase());
+    res.clearCookie('refreshToken', this.cookieBase());
+  }
+
   @Public()
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('register')
   @ApiOperation({ summary: "Créer un compte" })
   @ApiResponse({ status: 201, description: 'Compte créé avec succès' })
   @ApiResponse({ status: 409, description: 'Email ou téléphone déjà utilisé' })
-  register(@Body() dto: RegisterDto) {
-    return this.authService.register(dto);
+  async register(@Body() dto: RegisterDto, @Res({ passthrough: true }) res: Response) {
+    const { tokens, ...body } = await this.authService.register(dto);
+    this.setAuthCookies(res, tokens); // tokens jamais renvoyés dans le corps
+    return body;
   }
 
   @Public()
@@ -51,8 +78,11 @@ export class AuthController {
   @ApiOperation({ summary: 'Connexion' })
   @ApiResponse({ status: 200, description: 'Connexion réussie' })
   @ApiResponse({ status: 401, description: 'Identifiants invalides' })
-  login(@Body() dto: LoginDto, @Ip() ip: string) {
-    return this.authService.login(dto, ip);
+  async login(@Body() dto: LoginDto, @Ip() ip: string, @Res({ passthrough: true }) res: Response) {
+    // Cas 2FA-pending : le service ne renvoie pas de champ `tokens` → setAuthCookies no-op.
+    const { tokens, ...body } = await this.authService.login(dto, ip) as any;
+    this.setAuthCookies(res, tokens); // tokens jamais renvoyés dans le corps
+    return body;
   }
 
   @Public()
@@ -60,16 +90,20 @@ export class AuthController {
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Rafraîchir le token JWT' })
-  refresh(@CurrentUser() user: any) {
-    return this.authService.refreshTokens(user.id, user.email, user.role);
+  async refresh(@CurrentUser() user: any, @Res({ passthrough: true }) res: Response) {
+    const tokens = await this.authService.refreshTokens(user.id, user.email, user.role);
+    this.setAuthCookies(res, tokens); // rotation des cookies httpOnly
+    return { message: 'Session rafraîchie', data: null }; // aucun token dans le corps
   }
 
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Déconnexion' })
-  logout(@CurrentUser('id') userId: string) {
-    return this.authService.logout(userId);
+  async logout(@CurrentUser('id') userId: string, @Res({ passthrough: true }) res: Response) {
+    const result = await this.authService.logout(userId);
+    this.clearAuthCookies(res);
+    return result;
   }
 
   @Public()

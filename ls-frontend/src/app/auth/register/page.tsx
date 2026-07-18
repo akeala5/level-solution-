@@ -51,7 +51,7 @@ function RegisterContent() {
     try {
       const res = await api.post('/auth/register', { ...data, role: selectedRole })
       const result = res.data.data
-      login(result.user, result.accessToken, result.refreshToken)
+      login(result.user)
       toast.success('Compte créé ! Vérifiez votre email.')
       router.push('/dashboard')
     } catch (err: any) {

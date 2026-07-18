@@ -22,7 +22,15 @@ const nextConfig = {
   },
 };
 
-export default withSentryConfig(withNextIntl(nextConfig), {
+// DISABLE_SENTRY=true saute le plugin webpack Sentry (source-maps) au build :
+// indispensable sur un hôte à faible RAM. Le SDK runtime (sentry.*.config.ts +
+// instrumentation) reste actif ; seule la génération/upload de source-maps est
+// omise (les stacktraces Sentry seront minifiées pour ce build).
+const baseConfig = withNextIntl(nextConfig);
+
+export default process.env.DISABLE_SENTRY === 'true'
+  ? baseConfig
+  : withSentryConfig(baseConfig, {
   // Organisation et projet Sentry (à renseigner dans les variables d'env)
   org: process.env.SENTRY_ORG,
   project: process.env.SENTRY_PROJECT,

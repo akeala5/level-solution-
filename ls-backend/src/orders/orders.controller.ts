@@ -23,6 +23,15 @@ export class OrdersController {
     return this.ordersService.createOrder(buyerId, data);
   }
 
+  @Post('checkout')
+  @ApiOperation({ summary: 'Checkout transactionnel — tout le panier, groupé par vendeur (1 sous-commande/vendeur)' })
+  createCheckout(
+    @CurrentUser('id') buyerId: string,
+    @Body() data: { items: { productId: string; quantity?: number }[]; addressId?: string; notes?: string },
+  ) {
+    return this.ordersService.createCheckout(buyerId, data);
+  }
+
   @Get('buying')
   @ApiOperation({ summary: 'Mes commandes (acheteur)' })
   getBuyerOrders(
@@ -87,6 +96,16 @@ export class OrdersController {
     @Body() data: { reason: string; description: string; evidenceUrls?: string[] },
   ) {
     return this.ordersService.openDispute(id, userId, data);
+  }
+
+  @Post(':id/dispute/respond')
+  @ApiOperation({ summary: 'Répondre à un litige (vendeur de la commande)' })
+  respondToDispute(
+    @CurrentUser('id') userId: string,
+    @Param('id') id: string,
+    @Body() body: { response: string },
+  ) {
+    return this.ordersService.respondToDispute(id, userId, body.response);
   }
 
   @UseGuards(RolesGuard)

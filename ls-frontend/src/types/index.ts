@@ -257,6 +257,9 @@ export interface Dispute {
   reason: string
   description: string
   status: string
+  sellerResponse?: string | null
+  sellerRespondedAt?: string | null
+  resolution?: string | null
   createdAt: string
 }
 

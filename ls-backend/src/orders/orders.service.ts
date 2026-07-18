@@ -7,15 +7,21 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
+import { WalletService } from '../wallet/wallet.service';
 import { getPaginationParams, paginate } from '../common/utils/pagination.util';
 import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class OrdersService {
+  // Durée de vie d'une réservation de stock avant restauration automatique.
+  // 30 min : marge confortable pour les confirmations Mobile Money (souvent retardées).
+  static readonly RESERVATION_TTL_MS = 30 * 60 * 1000;
+
   constructor(
     private prisma: PrismaService,
     private notifications: NotificationsService,
     private webhooks: WebhooksService,
+    private wallet: WalletService,
   ) {}
 
   private generateOrderNumber(): string {
@@ -60,7 +66,8 @@ export class OrdersService {
     };
     const sellerPlan = product.seller.subscription?.plan || 'FREE';
     const commissionRate = commissionRates[sellerPlan] ?? 0.05;
-    const commissionAmount = totalAmount * commissionRate;
+    // Commission sur le sous-total uniquement (les frais de port ne sont pas commissionnés)
+    const commissionAmount = subtotal * commissionRate;
     const sellerAmount = totalAmount - commissionAmount;
 
     const order = await this.prisma.$transaction(async (tx) => {
@@ -93,10 +100,26 @@ export class OrdersService {
         },
       });
 
-      // Réduire le stock
-      await tx.product.update({
-        where: { id: product.id },
+      // Décrément CONDITIONNEL atomique : échoue si le stock est devenu
+      // insuffisant entre-temps (deux achats simultanés du dernier exemplaire
+      // → un seul passe), sans race condition.
+      const dec = await tx.product.updateMany({
+        where: { id: product.id, quantity: { gte: quantity } },
         data: { quantity: { decrement: quantity } },
+      });
+      if (dec.count === 0) {
+        throw new BadRequestException('Stock insuffisant'); // rollback de la transaction
+      }
+
+      // Réservation expirable : si le paiement n'est pas finalisé, le cron
+      // restaurera ce stock et annulera la commande (voir stock-reservation.job.ts).
+      await tx.stockReservation.create({
+        data: {
+          productId: product.id,
+          orderId: newOrder.id,
+          quantity,
+          expiresAt: new Date(Date.now() + OrdersService.RESERVATION_TTL_MS),
+        },
       });
 
       return newOrder;
@@ -110,6 +133,143 @@ export class OrdersService {
     }).catch(() => null);
 
     return { message: 'Commande créée', data: order };
+  }
+
+  // ─── CHECKOUT TRANSACTIONNEL (panier complet, groupé par vendeur) ────────────
+  // Remplace la boucle client « 1 POST /orders par article » : reçoit tout le
+  // panier, crée UNE sous-commande par vendeur (multi-articles) dans UNE seule
+  // transaction. Tout échoue ou tout réussit — plus de commandes orphelines.
+
+  async createCheckout(buyerId: string, data: {
+    items: { productId: string; quantity?: number }[];
+    addressId?: string;
+    notes?: string;
+  }) {
+    if (!data?.items?.length) throw new BadRequestException('Panier vide');
+    if (data.items.length > 50) throw new BadRequestException('Panier trop volumineux (50 articles max)');
+
+    // Consolider les doublons (même produit ajouté deux fois)
+    const wanted = new Map<string, number>();
+    for (const it of data.items) {
+      const qty = it.quantity || 1;
+      if (!Number.isInteger(qty) || qty < 1) throw new BadRequestException('Quantité invalide');
+      wanted.set(it.productId, (wanted.get(it.productId) || 0) + qty);
+    }
+
+    const products = await this.prisma.product.findMany({
+      where: { id: { in: [...wanted.keys()] }, status: 'ACTIVE' },
+      include: { seller: { include: { subscription: { select: { plan: true } } } } },
+    });
+    if (products.length !== wanted.size) {
+      throw new BadRequestException('Un ou plusieurs produits sont introuvables ou indisponibles');
+    }
+    if (products.some((p) => p.sellerId === buyerId)) {
+      throw new BadRequestException('Vous ne pouvez pas acheter votre propre produit');
+    }
+    for (const p of products) {
+      if (p.quantity < wanted.get(p.id)!) {
+        throw new BadRequestException(`Stock insuffisant pour « ${p.title} »`);
+      }
+    }
+
+    // Une sous-commande par vendeur
+    const bySeller = new Map<string, typeof products>();
+    for (const p of products) {
+      const list = bySeller.get(p.sellerId) ?? [];
+      list.push(p);
+      bySeller.set(p.sellerId, list);
+    }
+
+    const commissionRates: Record<string, number> = {
+      FREE: 0.05, BASIC: 0.045, ESSENTIAL: 0.04,
+      PREMIUM: 0.035, PRO: 0.03, BUSINESS: 0.02,
+    };
+
+    const orders = await this.prisma.$transaction(async (tx) => {
+      const created: any[] = [];
+      let parentId: string | null = null;
+
+      for (const [sellerId, prods] of bySeller) {
+        const subtotal = prods.reduce((s, p) => s + p.price * wanted.get(p.id)!, 0);
+        const delivery = prods.reduce((s, p) => s + (p.hasDelivery ? p.deliveryPrice || 0 : 0), 0);
+        const totalAmount = subtotal + delivery;
+        const plan = prods[0].seller.subscription?.plan || 'FREE';
+        const commissionRate = commissionRates[plan] ?? 0.05;
+        const commissionAmount = subtotal * commissionRate;
+        const sellerAmount = totalAmount - commissionAmount;
+
+        const newOrder = await tx.order.create({
+          data: {
+            orderNumber: this.generateOrderNumber(),
+            buyerId,
+            sellerId,
+            addressId: data.addressId || null,
+            totalAmount,
+            commissionAmount,
+            sellerAmount,
+            deliveryAmount: delivery,
+            notes: data.notes,
+            status: 'PENDING',
+            // La 1re commande du panier sert de commande principale ;
+            // les suivantes (autres vendeurs) pointent vers elle.
+            parentId,
+            items: {
+              create: prods.map((p) => ({
+                productId: p.id,
+                title: p.title,
+                price: p.price,
+                quantity: wanted.get(p.id)!,
+                imageUrl: null,
+              })),
+            },
+          },
+        });
+        if (!parentId) parentId = newOrder.id;
+
+        // Décrément atomique + réservation expirable, par produit (cf. Lot 2)
+        for (const p of prods) {
+          const qty = wanted.get(p.id)!;
+          const dec = await tx.product.updateMany({
+            where: { id: p.id, quantity: { gte: qty } },
+            data: { quantity: { decrement: qty } },
+          });
+          if (dec.count === 0) {
+            throw new BadRequestException(`Stock insuffisant pour « ${p.title} »`); // rollback total
+          }
+          await tx.stockReservation.create({
+            data: {
+              productId: p.id,
+              orderId: newOrder.id,
+              quantity: qty,
+              expiresAt: new Date(Date.now() + OrdersService.RESERVATION_TTL_MS),
+            },
+          });
+        }
+
+        created.push(newOrder);
+      }
+      return created;
+    });
+
+    // Webhooks vendeur hors transaction (non bloquants)
+    for (const o of orders) {
+      this.webhooks.dispatch(o.sellerId, 'order.created', {
+        orderId: o.id,
+        orderNumber: o.orderNumber,
+        totalAmount: o.totalAmount,
+        sellerAmount: o.sellerAmount,
+      }).catch(() => null);
+    }
+
+    return {
+      message: 'Commandes créées',
+      data: {
+        orderIds: orders.map((o) => o.id),
+        primaryOrderId: orders[0].id,
+        ordersCount: orders.length,
+        totalAmount: orders.reduce((s, o) => s + o.totalAmount, 0),
+      },
+    };
   }
 
   // ─── METTRE À JOUR LE STATUT ─────────────────────────────────────────────────
@@ -185,6 +345,11 @@ export class OrdersService {
             data: { quantity: { increment: item.quantity } },
           }),
         ),
+        // Clôturer les réservations liées pour éviter toute double-restauration par le cron
+        this.prisma.stockReservation.updateMany({
+          where: { orderId, releasedAt: null },
+          data: { releasedAt: new Date() },
+        }),
       ]);
       updated = results[0];
     } else {
@@ -229,29 +394,9 @@ export class OrdersService {
   }
 
   private async releaseEscrow(orderId: string) {
-    const order = await this.prisma.order.findUnique({
-      where: { id: orderId },
-      include: { payment: true, seller: { select: { id: true } } },
-    });
-
-    if (!order?.payment) return;
-
-    await this.prisma.$transaction([
-      this.prisma.payment.update({
-        where: { orderId },
-        data: { escrowReleasedAt: new Date() },
-      }),
-      // Points de fidélité pour l'acheteur
-      this.prisma.loyaltyAccount.upsert({
-        where: { userId: order.buyerId },
-        update: { points: { increment: Math.floor(order.totalAmount / 1000) } },
-        create: {
-          userId: order.buyerId,
-          points: Math.floor(order.totalAmount / 1000),
-          totalEarned: Math.floor(order.totalAmount / 1000),
-        },
-      }),
-    ]);
+    // Crédit du portefeuille VENDEUR + fidélité acheteur, idempotent
+    // (source unique de vérité : WalletService.creditSellerFromOrder).
+    await this.wallet.creditSellerFromOrder(orderId);
   }
 
   // ─── OUVRIR UN LITIGE ────────────────────────────────────────────────────────
@@ -284,6 +429,32 @@ export class OrdersService {
     ]);
 
     return { message: 'Litige ouvert', data: dispute };
+  }
+
+  // Le vendeur de la commande répond au litige (sa version des faits, texte).
+  async respondToDispute(orderId: string, sellerId: string, response: string) {
+    if (!response || !response.trim()) throw new BadRequestException('Réponse vide');
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: { dispute: true },
+    });
+    if (!order) throw new NotFoundException('Commande introuvable');
+    if (order.sellerId !== sellerId) throw new ForbiddenException('Seul le vendeur de la commande peut répondre');
+    if (!order.dispute) throw new BadRequestException('Aucun litige ouvert sur cette commande');
+    if (['RESOLVED_BUYER', 'RESOLVED_SELLER', 'CLOSED'].includes(order.dispute.status)) {
+      throw new BadRequestException('Ce litige est déjà clôturé');
+    }
+
+    const updated = await this.prisma.dispute.update({
+      where: { orderId },
+      data: {
+        sellerResponse: response.trim(),
+        sellerRespondedAt: new Date(),
+        // La réponse du vendeur fait passer un litige OPEN en cours d'examen.
+        status: order.dispute.status === 'OPEN' ? 'IN_PROGRESS' : order.dispute.status,
+      },
+    });
+    return { message: 'Réponse enregistrée', data: updated };
   }
 
   // ─── RÉCUPÉRER LES COMMANDES ──────────────────────────────────────────────────

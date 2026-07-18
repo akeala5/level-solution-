@@ -108,6 +108,13 @@ export class AdminController {
     return this.adminService.getDisputes(page, limit, status);
   }
 
+  @Put('disputes/:id/in-progress')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Marquer un litige en cours d'examen" })
+  setDisputeInProgress(@Param('id') disputeId: string) {
+    return this.adminService.setDisputeInProgress(disputeId);
+  }
+
   @Put('disputes/:id/resolve')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Résoudre un litige (en faveur acheteur ou vendeur)' })
@@ -188,6 +195,18 @@ export class AdminController {
     @CurrentUser('id') adminId: string,
   ) {
     return this.adminService.rejectEscrowPayment(ref, body.reason, adminId);
+  }
+
+  @Post('orders/:id/refund')
+  @HttpCode(HttpStatus.OK)
+  @Roles('ADMIN')
+  @ApiOperation({ summary: "Rembourser une commande (Stripe réel / FedaPay manuel, claw-back escrow)" })
+  refundOrder(
+    @Param('id') id: string,
+    @Body() body: { reason?: string },
+    @CurrentUser('id') adminId: string,
+  ) {
+    return this.adminService.refundOrder(id, adminId, body?.reason);
   }
 
   // ─── TRANSACTIONS ──────────────────────────────────────────────────────────────

@@ -61,7 +61,10 @@ export class AuthService {
           firstName: dto.firstName,
           lastName: dto.lastName,
           passwordHash,
-          role: dto.role || 'BUYER',
+          // Defense en profondeur : ne jamais assigner un role privilegie depuis
+          // l'inscription, meme si le DTO est contourne. Seul SELLER est opt-in ; tout
+          // le reste (ADMIN, MODERATOR, valeur inconnue) retombe sur BUYER.
+          role: dto.role === 'SELLER' ? 'SELLER' : 'BUYER',
           profile: { create: {} },
           subscription: { create: { plan: 'FREE' } },
           loyaltyAccount: { create: {} },
@@ -98,12 +101,14 @@ export class AuthService {
 
     const tokens = await this.generateTokens(user.id, user.email, user.role);
 
+    // tokens : champ frère consommé UNIQUEMENT par le controller (pose des cookies
+    // httpOnly). Jamais renvoyé dans le corps HTTP (cf. auth.controller).
     return {
       message: 'Compte créé avec succès. Vérifiez votre email.',
       data: {
         user: this.sanitizeUser(user),
-        ...tokens,
       },
+      tokens,
     };
   }
 
@@ -160,8 +165,8 @@ export class AuthService {
           ...this.sanitizeUser(user),
           plan: user.subscription?.plan || 'FREE',
         },
-        ...tokens,
       },
+      tokens,
     };
   }
 

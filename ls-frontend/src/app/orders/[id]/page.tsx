@@ -3,12 +3,12 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import {
   ArrowLeft, Package, Truck, CheckCircle, Clock, XCircle,
   AlertCircle, MapPin, Phone, CreditCard, Loader2,
-  MessageSquare, Star, Shield, Copy, ExternalLink, Award
+  MessageSquare, Star, Shield, Copy, ExternalLink, Award, Scale
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '@/store/auth.store'
@@ -105,6 +105,7 @@ export default function OrderDetailPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
   const { user, isAuthenticated, _hasHydrated } = useAuthStore()
+  const qc = useQueryClient()
 
   const { data, isLoading } = useQuery({
     queryKey: ['order', id],
@@ -122,6 +123,7 @@ export default function OrderDetailPage() {
   const [showDisputeForm, setShowDisputeForm] = useState(false)
   const [disputeReason, setDisputeReason] = useState('')
   const [disputeDescription, setDisputeDescription] = useState('')
+  const [sellerResponse, setSellerResponse] = useState('')
 
   const disputeMutation = useMutation({
     mutationFn: () => api.post(`/orders/${id}/dispute`, {
@@ -131,8 +133,19 @@ export default function OrderDetailPage() {
     onSuccess: () => {
       toast.success('Litige ouvert. Notre équipe vous contactera sous 48h.')
       setShowDisputeForm(false)
+      qc.invalidateQueries({ queryKey: ['order', id] })
     },
     onError: (err: any) => toast.error(err.response?.data?.message || 'Impossible d\'ouvrir le litige'),
+  })
+
+  const respondDisputeMutation = useMutation({
+    mutationFn: () => api.post(`/orders/${id}/dispute/respond`, { response: sellerResponse }),
+    onSuccess: () => {
+      toast.success('Réponse envoyée à notre équipe.')
+      setSellerResponse('')
+      qc.invalidateQueries({ queryKey: ['order', id] })
+    },
+    onError: (err: any) => toast.error(err.response?.data?.message || 'Impossible d\'envoyer la réponse'),
   })
 
   const confirmDeliveryMutation = useMutation({
@@ -497,6 +510,61 @@ export default function OrderDetailPage() {
                     Annuler
                   </button>
                 </div>
+              </div>
+            )}
+
+            {/* Panneau litige (visible acheteur ET vendeur dès qu'un litige existe) */}
+            {order.dispute && (
+              <div className="w-full mt-4 rounded-xl border border-border/60 p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Scale size={16} className="text-muted" />
+                  <span className="text-sm font-semibold text-dark">Litige</span>
+                  <span className={cn('ml-auto text-xs font-medium px-2 py-0.5 rounded-full',
+                    order.dispute.status === 'OPEN' ? 'bg-amber-100 text-amber-700'
+                      : order.dispute.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-700'
+                      : order.dispute.status === 'CLOSED' ? 'bg-slate-100 text-slate-600'
+                      : 'bg-emerald-100 text-emerald-700')}>
+                    {order.dispute.status === 'OPEN' ? 'Ouvert'
+                      : order.dispute.status === 'IN_PROGRESS' ? "En cours d'examen"
+                      : order.dispute.status === 'RESOLVED_BUYER' ? 'Résolu — acheteur'
+                      : order.dispute.status === 'RESOLVED_SELLER' ? 'Résolu — vendeur'
+                      : 'Clôturé'}
+                  </span>
+                </div>
+
+                <div className="text-xs text-muted">Motif : <span className="text-dark">{order.dispute.reason}</span></div>
+                {order.dispute.description && (
+                  <div className="text-sm text-dark whitespace-pre-line bg-surface rounded-lg p-3">{order.dispute.description}</div>
+                )}
+
+                {order.dispute.sellerResponse && (
+                  <div>
+                    <div className="text-xs text-muted mb-1">Réponse du vendeur</div>
+                    <div className="text-sm text-dark whitespace-pre-line bg-surface rounded-lg p-3">{order.dispute.sellerResponse}</div>
+                  </div>
+                )}
+
+                {order.dispute.resolution && (
+                  <div>
+                    <div className="text-xs text-muted mb-1">Décision de l'équipe</div>
+                    <div className="text-sm text-dark bg-surface rounded-lg p-3">{order.dispute.resolution}</div>
+                  </div>
+                )}
+
+                {isSeller && !order.dispute.sellerResponse
+                  && !['RESOLVED_BUYER', 'RESOLVED_SELLER', 'CLOSED'].includes(order.dispute.status) && (
+                  <div className="space-y-2 pt-1">
+                    <textarea value={sellerResponse} onChange={(e) => setSellerResponse(e.target.value)} rows={3}
+                      placeholder="Votre version des faits (transmise à notre équipe)…"
+                      className="w-full text-sm border border-border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none" />
+                    <button onClick={() => respondDisputeMutation.mutate()}
+                      disabled={!sellerResponse.trim() || respondDisputeMutation.isPending}
+                      className="btn-primary btn-sm disabled:opacity-50 inline-flex items-center gap-2">
+                      {respondDisputeMutation.isPending ? <Loader2 size={15} className="animate-spin" /> : null}
+                      Répondre au litige
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 

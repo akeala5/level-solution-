@@ -2,7 +2,9 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { OrdersService } from './orders.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { WebhooksService } from '../webhooks/webhooks.service';
+import { WalletService } from '../wallet/wallet.service';
+import { ForbiddenException } from '@nestjs/common';
 
 // ── Mocks ──────────────────────────────────────────────────────────────────
 
@@ -18,17 +20,31 @@ const mockPrisma = {
   product: {
     findUnique: jest.fn(),
     update: jest.fn(),
+    updateMany: jest.fn().mockResolvedValue({ count: 1 }),
   },
   dispute: { create: jest.fn() },
   loyaltyAccount: { update: jest.fn() },
   loyaltyTransaction: { create: jest.fn() },
-  $transaction: jest.fn((fn) => fn(mockPrisma)),
+  stockReservation: {
+    create: jest.fn().mockResolvedValue({}),
+    updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+  },
+  // Gère les deux formes : $transaction(cb) et $transaction([promesses]).
+  $transaction: jest.fn((arg) => (Array.isArray(arg) ? Promise.all(arg) : arg(mockPrisma))),
 };
 
 const mockNotifications = {
   sendOrderConfirmation: jest.fn(),
   sendOrderShipped: jest.fn(),
   createNotification: jest.fn(),
+};
+
+const mockWebhooks = {
+  dispatch: jest.fn().mockResolvedValue(undefined),
+};
+
+const mockWallet = {
+  creditSellerFromOrder: jest.fn().mockResolvedValue(true),
 };
 
 // ── Tests ──────────────────────────────────────────────────────────────────
@@ -42,6 +58,8 @@ describe('OrdersService', () => {
         OrdersService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: NotificationsService, useValue: mockNotifications },
+        { provide: WebhooksService, useValue: mockWebhooks },
+        { provide: WalletService, useValue: mockWallet },
       ],
     }).compile();
 
@@ -121,7 +139,7 @@ describe('OrdersService', () => {
         buyer: { firstName: 'Jean', email: 'jean@test.com', phone: null },
         seller: { firstName: 'Marc', email: 'marc@test.com', phone: null },
       };
-      mockPrisma.order.findFirst.mockResolvedValue(order);
+      mockPrisma.order.findUnique.mockResolvedValue(order);
       mockPrisma.order.update.mockImplementation(({ data }) => {
         // escrowReleaseAt doit être ~48h dans le futur
         if (data.status === 'DELIVERED') {
@@ -150,7 +168,7 @@ describe('OrdersService', () => {
         buyer: { firstName: 'Jean', email: 'jean@test.com', phone: null },
         seller: { firstName: 'Marc', email: 'marc@test.com', phone: null },
       };
-      mockPrisma.order.findFirst.mockResolvedValue(order);
+      mockPrisma.order.findUnique.mockResolvedValue(order);
       mockPrisma.product.update.mockResolvedValue({});
       mockPrisma.order.update.mockResolvedValue({ ...order, status: 'CANCELLED' });
 
@@ -172,7 +190,7 @@ describe('OrdersService', () => {
         buyer: { firstName: 'Jean', email: 'j@test.com', phone: null },
         seller: { firstName: 'Marc', email: 'm@test.com', phone: null },
       };
-      mockPrisma.order.findFirst.mockResolvedValue(order);
+      mockPrisma.order.findUnique.mockResolvedValue(order);
       mockPrisma.order.update.mockResolvedValue({ ...order, status: 'PROCESSING' });
 
       await service.updateStatus('order-1', 'seller-1', 'SELLER', 'PROCESSING');
@@ -202,7 +220,7 @@ describe('OrdersService', () => {
       mockPrisma.order.findUnique.mockResolvedValue(order);
 
       const result = await service.getOrderById('order-1', 'user-A', 'BUYER');
-      expect(result).toEqual(order);
+      expect(result.data).toEqual(order);
     });
   });
 });

@@ -14,9 +14,11 @@ import {
   Wrench, Tractor, Hammer, Music, Gamepad2,
   Leaf, Sun, Stethoscope, GraduationCap, Briefcase,
   Building2, Fish, PawPrint, Plane, Gem, Gavel,
+  Wallet, Banknote, Flag, Scale,
 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import LanguageSwitcher from '../common/LanguageSwitcher'
+import ThemeToggle from '../common/ThemeToggle'
 import { useAuthStore } from '@/store/auth.store'
 import { useCartStore } from '@/store/cart.store'
 import { cn, initials } from '@/lib/utils'
@@ -336,6 +338,7 @@ export default function Header() {
 
             {/* Actions */}
             <div className="flex items-center gap-1">
+              <ThemeToggle className="hidden md:flex" />
               <Link href="/cart" aria-label={cartCount > 0 ? t('cart_count', { count: cartCount }) : t('cart')} className="relative btn-icon text-dark hover:bg-gray-100">
                 <ShoppingCart size={20} aria-hidden="true" />
                 {cartCount > 0 && (
@@ -384,9 +387,17 @@ export default function Header() {
                             {[
                               { icon: LayoutDashboard, label: t('dashboard'),  href: '/dashboard' },
                               { icon: Package,         label: t('orders'),    href: '/dashboard/buyer' },
+                              { icon: Wallet,          label: 'Portefeuille', href: '/dashboard/wallet' },
                               { icon: Heart,           label: t('favorites'), href: '/dashboard/buyer' },
                               { icon: MessageSquare,   label: t('messages'),  href: '/chat' },
                               { icon: Settings,        label: t('settings'),  href: '/profile' },
+                              ...(['ADMIN', 'MODERATOR'].includes(user?.role || '')
+                                ? [
+                                    { icon: Banknote, label: 'Retraits', href: '/admin/payouts' },
+                                    { icon: Flag, label: 'Signalements', href: '/admin/reports' },
+                                    { icon: Scale, label: 'Litiges', href: '/admin/disputes' },
+                                  ]
+                                : []),
                             ].map(({ icon: Icon, label, href }) => (
                               <Link key={href} href={href} onClick={() => setUserMenuOpen(false)}
                                 className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-surface text-sm text-dark hover:text-primary transition-colors">
@@ -443,6 +454,10 @@ export default function Header() {
                   </button>
                 </div>
               </form>
+              <div className="flex items-center justify-between px-3 py-1.5 mb-3 rounded-xl bg-gray-50">
+                <span className="text-sm font-medium text-dark">Thème</span>
+                <ThemeToggle />
+              </div>
               {categoryGroups.map((group) => {
                 const Icon = group.icon
                 return (
@@ -476,9 +491,17 @@ export default function Header() {
                 <div className="mt-4 pt-4 border-t border-border space-y-1">
                   {[
                     { label: t('dashboard'), href: '/dashboard' },
+                    { label: 'Portefeuille', href: '/dashboard/wallet' },
                     { label: t('messages'),  href: '/chat' },
                     { label: t('orders'),    href: '/dashboard/buyer' },
                     { label: t('settings'),  href: '/profile' },
+                    ...(['ADMIN', 'MODERATOR'].includes(user?.role || '')
+                      ? [
+                          { label: 'Retraits', href: '/admin/payouts' },
+                          { label: 'Signalements', href: '/admin/reports' },
+                          { label: 'Litiges', href: '/admin/disputes' },
+                        ]
+                      : []),
                   ].map(({ label, href }) => (
                     <Link key={href} href={href} onClick={() => setMobileOpen(false)}
                       className="block px-3 py-3 rounded-xl hover:bg-gray-50 font-medium text-dark">{label}</Link>

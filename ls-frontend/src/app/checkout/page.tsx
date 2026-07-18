@@ -174,18 +174,17 @@ export default function CheckoutPage() {
     const shippingNote = `Livraison: ${data.firstName} ${data.lastName} — ${data.address}, ${data.city} — Tél: ${countryInfo?.dialCode || ''} ${data.phone}`
     const fullNotes    = data.notes ? `${data.notes}\n${shippingNote}` : shippingNote
 
-    // ── Création séquentielle des commandes avec rollback si échec ──────────
-    const createdOrderIds: string[] = []
+    // ── Création TRANSACTIONNELLE : tout le panier en un seul appel.
+    // Le back groupe par vendeur (1 sous-commande/vendeur) — tout réussit ou
+    // tout échoue, plus de commandes orphelines ni de rollback client.
+    let createdOrderIds: string[] = []
     try {
-      for (const item of items) {
-        const res = await api.post('/orders', { productId: item.productId, quantity: item.quantity, notes: fullNotes })
-        createdOrderIds.push(res.data.data.id)
-      }
+      const res = await api.post('/orders/checkout', {
+        items: items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
+        notes: fullNotes,
+      })
+      createdOrderIds = res.data.data.orderIds
     } catch (err: any) {
-      // Annuler les commandes déjà créées pour restaurer le stock
-      if (createdOrderIds.length > 0) {
-        await Promise.allSettled(createdOrderIds.map((id) => api.patch(`/orders/${id}/cancel`)))
-      }
       toast.error(err.response?.data?.message || 'Erreur lors de la création de la commande')
       return
     }

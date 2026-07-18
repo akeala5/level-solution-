@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
+  darkMode: ['class'],
   content: [
     './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',
@@ -22,14 +23,29 @@ module.exports = {
           900: '#091832',
         },
         secondary: { DEFAULT: '#F97316', dark: '#EA6C00' },
-        accent:   { DEFAULT: '#27AE60', 50: '#EAFAF1', 100: '#D5F5E3' },
+        accent: {
+          DEFAULT: '#27AE60',
+          50:  '#EAFAF1',
+          100: '#D5F5E3',
+          200: '#ABEBC6',
+          300: '#82E0AA',
+          400: '#52BE80',
+          500: '#27AE60',
+          600: '#1E8449',
+          700: '#196F3D',
+          800: '#145A32',
+          900: '#0E3D22',
+        },
         success:  { DEFAULT: '#27AE60' },
         warning:  { DEFAULT: '#F59E0B' },
         danger:   { DEFAULT: '#E74C3C' },
-        dark:     { DEFAULT: '#1E293B' },
-        muted:    { DEFAULT: '#64748B' },
-        surface:  { DEFAULT: '#F8FAFC' },
-        border:   { DEFAULT: '#E2E8F0' },
+        /* Tokens theme-aware (variables CSS définies dans globals.css) */
+        dark:     'rgb(var(--fg) / <alpha-value>)',
+        fg:       'rgb(var(--fg) / <alpha-value>)',
+        muted:    'rgb(var(--muted) / <alpha-value>)',
+        surface:  'rgb(var(--surface) / <alpha-value>)',
+        border:   'rgb(var(--border) / <alpha-value>)',
+        card:     'rgb(var(--card) / <alpha-value>)',
       },
       fontFamily: {
         sans:    ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
@@ -40,22 +56,11 @@ module.exports = {
         card:        '0 2px 8px rgba(0,0,0,0.08)',
         'card-hover':'0 12px 32px rgba(0,0,0,0.14)',
         nav:         '0 2px 16px rgba(0,0,0,0.08)',
-        glow:        '0 0 32px rgba(39,174,96,0.35)',
-      },
-      backgroundImage: {
-        'gradient-primary': 'linear-gradient(135deg, #1A3C6E 0%, #2563EB 100%)',
-        'gradient-hero':    'linear-gradient(135deg, #0F2447 0%, #1A3C6E 50%, #1D4ED8 100%)',
-        'gradient-accent':  'linear-gradient(135deg, #27AE60 0%, #1A8C4E 100%)',
       },
       animation: {
-        'bounce-soft': 'bounceSoft 3s ease-in-out infinite',
-        'fade-in':     'fadeIn 0.3s ease-out',
+        'fade-in': 'fadeIn 0.3s ease-out',
       },
       keyframes: {
-        bounceSoft: {
-          '0%,100%': { transform: 'translateY(0px)' },
-          '50%':     { transform: 'translateY(-8px)' },
-        },
         fadeIn: {
           from: { opacity: '0', transform: 'translateY(8px)' },
           to:   { opacity: '1', transform: 'translateY(0)' },

@@ -271,6 +271,21 @@ export class ProductsService {
   // ─── GESTION VENDEUR ──────────────────────────────────────────────────────────
 
   async create(sellerId: string, dto: CreateProductDto, plan: string) {
+    // Gate KYC : interdire la vente tant que l'identité n'est pas vérifiée.
+    // Activable via REQUIRE_KYC_TO_SELL=true (désactivé par défaut pour ne pas
+    // bloquer rétroactivement les vendeurs déjà actifs).
+    if (process.env.REQUIRE_KYC_TO_SELL === 'true') {
+      const seller = await this.prisma.user.findUnique({
+        where: { id: sellerId },
+        select: { isKycVerified: true },
+      });
+      if (!seller?.isKycVerified) {
+        throw new ForbiddenException(
+          'Vérification d\'identité (KYC) requise avant de publier une annonce.',
+        );
+      }
+    }
+
     // Vérifier la limite du forfait
     const activeCount = await this.prisma.product.count({
       where: { sellerId, status: { in: ['ACTIVE', 'PENDING_REVIEW', 'DRAFT'] } },

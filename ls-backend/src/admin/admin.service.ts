@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { PaymentsService } from '../payments/payments.service';
+import { WalletService } from '../wallet/wallet.service';
 import { getPaginationParams, paginate } from '../common/utils/pagination.util';
 
 @Injectable()
@@ -15,6 +17,8 @@ export class AdminService {
   constructor(
     private prisma: PrismaService,
     private notifications: NotificationsService,
+    private payments: PaymentsService,
+    private wallet: WalletService,
   ) {}
 
   // ─── STATISTIQUES PLATEFORME ─────────────────────────────────────────────────
@@ -289,23 +293,29 @@ export class AdminService {
       throw new BadRequestException('Ce litige est déjà résolu');
     }
 
-    await this.prisma.$transaction([
-      this.prisma.dispute.update({
-        where: { id: disputeId },
-        data: {
-          status: resolution,
-          resolution: notes,
-          resolvedBy: adminId,
-          resolvedAt: new Date(),
-        },
-      }),
-      this.prisma.order.update({
-        where: { id: dispute.orderId },
-        data: {
-          status: resolution === 'RESOLVED_BUYER' ? 'REFUNDED' : 'COMPLETED',
-        },
-      }),
-    ]);
+    if (resolution === 'RESOLVED_BUYER') {
+      // Remboursement RÉEL (Stripe carte / FedaPay manuel) + claw-back escrow si besoin.
+      // Fait avant la clôture du litige : si le refund échoue, le litige reste ouvert.
+      await this.payments.refundOrder(dispute.orderId, { adminId, reason: notes });
+    } else {
+      // RESOLVED_SELLER : litige tranché pour le vendeur → libérer l'escrow
+      // (créditer son portefeuille, idempotent) puis clôturer la commande.
+      await this.wallet.creditSellerFromOrder(dispute.orderId);
+      await this.prisma.order.updateMany({
+        where: { id: dispute.orderId, status: 'DISPUTED' },
+        data: { status: 'COMPLETED', completedAt: new Date() },
+      });
+    }
+
+    await this.prisma.dispute.update({
+      where: { id: disputeId },
+      data: {
+        status: resolution,
+        resolution: notes,
+        resolvedBy: adminId,
+        resolvedAt: new Date(),
+      },
+    });
 
     const favoredUser = resolution === 'RESOLVED_BUYER'
       ? dispute.order.buyer
@@ -319,6 +329,25 @@ export class AdminService {
     });
 
     return { message: 'Litige résolu' };
+  }
+
+  // Remboursement direct d'une commande par un admin (hors litige).
+  async refundOrder(orderId: string, adminId: string, reason?: string) {
+    return this.payments.refundOrder(orderId, { adminId, reason });
+  }
+
+  // Marquer un litige « en cours d'examen » (transition douce avant résolution).
+  async setDisputeInProgress(disputeId: string) {
+    const dispute = await this.prisma.dispute.findUnique({ where: { id: disputeId } });
+    if (!dispute) throw new NotFoundException('Litige introuvable');
+    if (!['OPEN', 'IN_PROGRESS'].includes(dispute.status)) {
+      throw new BadRequestException('Ce litige est déjà résolu');
+    }
+    const updated = await this.prisma.dispute.update({
+      where: { id: disputeId },
+      data: { status: 'IN_PROGRESS' },
+    });
+    return { message: 'Litige marqué en cours', data: updated };
   }
 
   // ─── KYC ─────────────────────────────────────────────────────────────────────

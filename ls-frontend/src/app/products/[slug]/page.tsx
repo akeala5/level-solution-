@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import Image from 'next/image'
 import Link from 'next/link'
 import {
-  Heart, Share2, Flag, ChevronLeft, ChevronRight, Star, MapPin, Package,
+  Heart, Share2, ChevronLeft, ChevronRight, Star, MapPin, Package,
   Truck, Shield, MessageSquare, ShoppingCart, Zap, Check, ChevronDown,
   User, Calendar, Eye, Award, RefreshCw, Loader2, X, ZoomIn, Layers
 } from 'lucide-react'
@@ -21,6 +21,7 @@ import { useCartStore } from '@/store/cart.store'
 import { Product, Review } from '@/types'
 import { cn, formatPrice, timeAgo, getConditionLabel, imgBlurDataURL } from '@/lib/utils'
 import ProductCard from '@/components/product/ProductCard'
+import ReportProductButton from '@/components/product/ReportProductButton'
 import { useRecentlyViewed } from '@/hooks/useRecentlyViewed'
 
 const CONDITION_COLORS: Record<string, string> = {
@@ -272,6 +273,9 @@ export default function ProductDetailPage() {
                     {showFullDesc ? 'Voir moins' : 'Voir plus'} <ChevronDown size={12} className={cn('transition-transform', showFullDesc && 'rotate-180')} />
                   </button>
                 )}
+                <div className="mt-4 pt-3 border-t border-border/50">
+                  <ReportProductButton productId={product.id} />
+                </div>
 
                 {/* Tags */}
                 {product.tags?.length > 0 && (
@@ -536,11 +540,6 @@ export default function ProductDetailPage() {
                   </div>
                 </div>
               )}
-
-              {/* Report */}
-              <button className="flex items-center gap-1.5 text-xs text-muted hover:text-danger transition-colors mx-auto">
-                <Flag size={12} /> Signaler cette annonce
-              </button>
             </div>
           </div>
 

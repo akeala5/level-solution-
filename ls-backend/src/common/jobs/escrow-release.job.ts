@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../../notifications/notifications.service';
+import { WalletService } from '../../wallet/wallet.service';
 
 @Injectable()
 export class EscrowReleaseJob {
@@ -10,6 +11,7 @@ export class EscrowReleaseJob {
   constructor(
     private prisma: PrismaService,
     private notifications: NotificationsService,
+    private wallet: WalletService,
   ) {}
 
   // Vérifie toutes les heures les escrows expirés
@@ -37,31 +39,15 @@ export class EscrowReleaseJob {
 
     for (const order of ordersToComplete) {
       try {
-        await this.prisma.$transaction([
-          // Marquer la commande comme terminée
-          this.prisma.order.update({
-            where: { id: order.id },
-            data: { status: 'COMPLETED', completedAt: now },
-          }),
-          // Libérer l'escrow
-          this.prisma.payment.update({
-            where: { orderId: order.id },
-            data: { escrowReleasedAt: now },
-          }),
-          // Créditer les points de fidélité de l'acheteur
-          this.prisma.loyaltyAccount.upsert({
-            where: { userId: order.buyerId },
-            update: {
-              points: { increment: Math.floor(order.totalAmount / 1000) },
-              totalEarned: { increment: Math.floor(order.totalAmount / 1000) },
-            },
-            create: {
-              userId: order.buyerId,
-              points: Math.floor(order.totalAmount / 1000),
-              totalEarned: Math.floor(order.totalAmount / 1000),
-            },
-          }),
-        ]);
+        // Libère l'escrow + crédite le PORTEFEUILLE VENDEUR + fidélité acheteur
+        // via la source unique de vérité (idempotent : flip escrowReleasedAt).
+        await this.wallet.creditSellerFromOrder(order.id);
+
+        // Marquer la commande comme terminée (gardé : uniquement depuis DELIVERED)
+        await this.prisma.order.updateMany({
+          where: { id: order.id, status: 'DELIVERED' },
+          data: { status: 'COMPLETED', completedAt: now },
+        });
 
         // Notification au vendeur
         await this.notifications.createNotification({

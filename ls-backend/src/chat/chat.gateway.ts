@@ -32,7 +32,15 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   async handleConnection(client: Socket) {
     try {
-      const token = client.handshake.auth?.token || client.handshake.headers?.authorization?.replace('Bearer ', '');
+      // Cookie httpOnly (envoyé automatiquement à l'upgrade WS, même origine) en 3e recours.
+      const cookieHeader = client.handshake.headers?.cookie;
+      const cookieToken = cookieHeader
+        ? cookieHeader.split(';').map((c) => c.trim()).find((c) => c.startsWith('accessToken='))?.slice('accessToken='.length)
+        : undefined;
+      const token =
+        client.handshake.auth?.token ||
+        client.handshake.headers?.authorization?.replace('Bearer ', '') ||
+        (cookieToken ? decodeURIComponent(cookieToken) : undefined);
       if (!token) { client.disconnect(); return; }
 
       const payload = this.jwtService.verify(token, {

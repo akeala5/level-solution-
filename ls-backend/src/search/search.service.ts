@@ -41,6 +41,17 @@ export class SearchService implements OnModuleInit {
     }
   }
 
+  // Sonde de santé pour /health : 'disabled' si non configuré, sinon 'up'/'down'.
+  async ping(): Promise<'up' | 'down' | 'disabled'> {
+    if (!this.enabled || !this.client) return 'disabled';
+    try {
+      await this.client.health();
+      return 'up';
+    } catch {
+      return 'down';
+    }
+  }
+
   async onModuleInit() {
     if (!this.enabled) {
       this.logger.warn('Meilisearch désactivé — MEILISEARCH_HOST non défini');

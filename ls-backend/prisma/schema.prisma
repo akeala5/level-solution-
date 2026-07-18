@@ -174,6 +174,9 @@ model User {
   sponsoredAds      SponsoredAd[]
   apiKeys           ApiKey[]
   webhookEndpoints  WebhookEndpoint[]
+  sellerWallet      SellerWallet?
+  payoutRequests    PayoutRequest[]
+  reports           Report[]            @relation("ReportReporter")
 
   @@map("users")
 }
@@ -471,21 +474,113 @@ model Order {
   cancelledAt       DateTime?
   cancellationReason String?
   escrowReleaseAt   DateTime?
+  // Groupement checkout multi-vendeurs : les sous-commandes pointent vers
+  // la commande principale du même panier (parentId = id de la 1re commande).
+  parentId          String?
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
 
   buyer             User        @relation("BuyerOrders", fields: [buyerId], references: [id])
   seller            User        @relation("SellerOrders", fields: [sellerId], references: [id])
   address           Address?    @relation(fields: [addressId], references: [id])
+  parent            Order?      @relation("OrderChildren", fields: [parentId], references: [id])
+  children          Order[]     @relation("OrderChildren")
   items             OrderItem[]
   payment           Payment?
   review            Review?
   dispute           Dispute?
+  reservations      StockReservation[]
 
   @@index([buyerId, createdAt])
   @@index([sellerId, status])
   @@index([status, escrowReleaseAt])
+  @@index([parentId])
   @@map("orders")
+}
+
+// Idempotence des webhooks providers (Stripe / FedaPay) : un même
+// événement rejoué ne peut être traité qu'une seule fois.
+model WebhookEvent {
+  id        String   @id @default(uuid())
+  provider  String   // 'STRIPE' | 'FEDAPAY'
+  eventKey  String
+  createdAt DateTime @default(now())
+
+  @@unique([provider, eventKey])
+  @@map("webhook_events")
+}
+
+// ─── PORTEFEUILLE VENDEUR & RETRAITS ─────────────────────────────────────────
+
+// Solde du vendeur, crédité à la libération d'escrow (montant net après commission).
+model SellerWallet {
+  id           String   @id @default(uuid())
+  sellerId     String   @unique
+  balance      Float    @default(0)
+  currency     String   @default("XOF")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  seller       User                @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  transactions WalletTransaction[]
+
+  @@map("seller_wallets")
+}
+
+// Journal immuable des mouvements du portefeuille (crédit vente, retrait, ajustement).
+model WalletTransaction {
+  id              String   @id @default(uuid())
+  sellerId        String
+  orderId         String?
+  payoutRequestId String?
+  type            String   // 'CREDIT' | 'PAYOUT' | 'REFUND_CREDIT' | 'REFUND_DEBIT'
+  amount          Float    // toujours positif ; le sens est porté par `type`
+  label           String
+  createdAt       DateTime @default(now())
+
+  wallet          SellerWallet @relation(fields: [sellerId], references: [sellerId])
+
+  @@index([sellerId, createdAt])
+  @@map("wallet_transactions")
+}
+
+// Demande de retrait vendeur, validée puis versée par un admin.
+model PayoutRequest {
+  id          String    @id @default(uuid())
+  sellerId    String
+  amount      Float
+  method      String    // 'FEDAPAY' | 'BANK_TRANSFER'
+  destination Json      // n° Mobile Money ou coordonnées bancaires
+  status      String    @default("PENDING") // PENDING | APPROVED | PAID | REJECTED
+  notes       String?
+  processedBy String?
+  processedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  seller      User      @relation(fields: [sellerId], references: [id])
+
+  @@index([sellerId, status])
+  @@index([status, createdAt])
+  @@map("payout_requests")
+}
+
+// Réservation de stock expirable : le stock décrémenté à la création d'une
+// commande PENDING est restauré par cron si le paiement n'est pas finalisé.
+model StockReservation {
+  id         String    @id @default(uuid())
+  productId  String
+  orderId    String
+  quantity   Int
+  expiresAt  DateTime
+  releasedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  order      Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt, releasedAt])
+  @@index([orderId])
+  @@map("stock_reservations")
 }
 
 model OrderItem {
@@ -626,6 +721,8 @@ model Dispute {
   description  String
   evidenceUrls String[]
   status       DisputeStatus @default(OPEN)
+  sellerResponse    String?
+  sellerRespondedAt DateTime?
   resolution   String?
   resolvedBy   String?
   resolvedAt   DateTime?
@@ -636,6 +733,52 @@ model Dispute {
   initiator    User          @relation("DisputeInitiator", fields: [initiatorId], references: [id])
 
   @@map("disputes")
+}
+
+// ─── SIGNALEMENTS / MODERATION ────────────────────────────────────────────────
+
+model Report {
+  id          String           @id @default(uuid())
+  reporterId  String
+  targetType  ReportTargetType
+  targetId    String
+  reason      ReportReason
+  description String?
+  status      ReportStatus     @default(PENDING)
+  resolution  String?
+  handledBy   String?
+  handledAt   DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  reporter    User             @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([targetType, targetId])
+  @@index([reporterId])
+  @@map("reports")
+}
+
+enum ReportTargetType {
+  PRODUCT
+  USER
+  REVIEW
+}
+
+enum ReportReason {
+  SCAM
+  COUNTERFEIT
+  PROHIBITED
+  OFFENSIVE
+  SPAM
+  OTHER
+}
+
+enum ReportStatus {
+  PENDING
+  REVIEWING
+  ACTIONED
+  DISMISSED
 }
 
 // ─── FAVORIS ──────────────────────────────────────────────────────────────────

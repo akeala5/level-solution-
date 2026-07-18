@@ -13,7 +13,7 @@ export default function Footer() {
   }
 
   return (
-    <footer className="bg-dark text-white">
+    <footer className="bg-[#1A1A2E] text-white">
       {/* Trust bar */}
       <div className="border-b border-white/10">
         <div className="container-custom py-6">

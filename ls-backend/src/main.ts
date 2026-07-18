@@ -6,6 +6,7 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import * as helmet from 'helmet';
 import * as compression from 'compression';
+import * as cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 import { SentryInterceptor } from './common/interceptors/sentry.interceptor';
 
@@ -35,14 +36,20 @@ async function bootstrap() {
   // ─── SÉCURITÉ ────────────────────────────────────────────────────────────────
   app.use(helmet.default());
   app.use(compression());
+  app.use(cookieParser());
 
   // ─── CORS ────────────────────────────────────────────────────────────────────
+  // En production : uniquement FRONTEND_URL. localhost réservé au développement.
+  const corsOrigins =
+    process.env.NODE_ENV === 'production'
+      ? [process.env.FRONTEND_URL].filter(Boolean)
+      : [
+          process.env.FRONTEND_URL || 'http://localhost:3000',
+          'http://localhost:3000',
+          'http://localhost:3001',
+        ];
   app.enableCors({
-    origin: [
-      process.env.FRONTEND_URL || 'http://localhost:3000',
-      'http://localhost:3000',
-      'http://localhost:3001',
-    ],
+    origin: corsOrigins,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept-Language'],

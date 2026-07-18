@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, UnauthorizedException, Logger } from '@nestjs/common';
+import { Injectable, BadRequestException, UnauthorizedException, NotFoundException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import Stripe from 'stripe';
@@ -89,6 +89,12 @@ export class PaymentsService {
       );
     } catch (err) {
       throw new BadRequestException(`Webhook signature invalide: ${err.message}`);
+    }
+
+    // Idempotence : un événement Stripe rejoué n'est traité qu'une seule fois.
+    if (!(await this.registerWebhookEvent('STRIPE', event.id))) {
+      this.logger.warn(`Webhook Stripe déjà traité: ${event.id}`);
+      return { received: true, duplicate: true };
     }
 
     switch (event.type) {
@@ -385,37 +391,92 @@ export class PaymentsService {
   }
 
   async handleFedaPayCallback(rawBody: Buffer, signature?: string) {
-    // Vérification HMAC-SHA256 si le secret est configuré
+    // Signature TOUJOURS obligatoire (fail-closed) : sans secret configuré ou
+    // sans signature valide, le callback est rejeté — jamais traité.
     const webhookSecret = this.configService.get<string>('fedapay.webhookSecret');
-    if (webhookSecret && signature) {
-      const expectedSig = crypto
-        .createHmac('sha256', webhookSecret)
-        .update(rawBody)
-        .digest('hex');
-      if (signature !== `sha256=${expectedSig}`) {
-        throw new UnauthorizedException('Signature FedaPay invalide');
-      }
+    if (!webhookSecret) {
+      this.logger.error('FEDAPAY_WEBHOOK_SECRET manquant — callback rejeté');
+      throw new UnauthorizedException('Webhook non configuré');
+    }
+    if (!rawBody?.length || !signature) {
+      throw new UnauthorizedException('Signature FedaPay manquante');
+    }
+    if (!this.verifyFedaPaySignature(rawBody, signature, webhookSecret)) {
+      throw new UnauthorizedException('Signature FedaPay invalide');
     }
 
     try {
       const data = JSON.parse(rawBody.toString('utf8'));
       const { transaction } = data;
-      if (!transaction) return;
+      if (!transaction?.id) return { received: true };
+
+      // Idempotence : un même événement (id + statut) rejoué par FedaPay
+      // n'est traité qu'une seule fois.
+      const eventKey = `${transaction.id}:${transaction.status}`;
+      if (!(await this.registerWebhookEvent('FEDAPAY', eventKey))) {
+        this.logger.warn(`Webhook FedaPay déjà traité: ${eventKey}`);
+        return { received: true, duplicate: true };
+      }
 
       // Récupère TOUS les paiements liés à ce providerRef (cas multi-commandes)
       const payments = await this.prisma.payment.findMany({
         where: { providerRef: String(transaction.id) },
       });
-      if (!payments.length) return;
+      if (!payments.length) return { received: true };
 
       if (transaction.status === 'approved') {
         await Promise.all(payments.map((p) => this.confirmPayment(p.orderId, String(transaction.id))));
-      } else if (['declined', 'cancelled'].includes(transaction.status)) {
+      } else if (['declined', 'canceled', 'cancelled'].includes(transaction.status)) {
         await Promise.all(payments.map((p) => this.failPayment(p.orderId)));
       }
+      return { received: true };
     } catch (error) {
       this.logger.error('FedaPay callback error:', error.message);
+      return { received: true };
     }
+  }
+
+  // Enregistre un événement webhook ; retourne false s'il a déjà été vu
+  // (contrainte @@unique(provider, eventKey) → doublon rejeté silencieusement).
+  private async registerWebhookEvent(provider: string, eventKey: string): Promise<boolean> {
+    try {
+      await this.prisma.webhookEvent.create({ data: { provider, eventKey } });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // Formats de signature acceptés :
+  //  - officiel FedaPay (style Stripe) : "t=<timestamp>,s=<hex>" — HMAC-SHA256 de "<t>.<body>"
+  //  - legacy : "sha256=<hex>" ou "<hex>" — HMAC-SHA256 du body seul
+  private verifyFedaPaySignature(rawBody: Buffer, signature: string, secret: string): boolean {
+    const safeEqualHex = (a: string, b: string): boolean => {
+      const ba = Buffer.from(a, 'utf8');
+      const bb = Buffer.from(b, 'utf8');
+      return ba.length === bb.length && crypto.timingSafeEqual(ba, bb);
+    };
+
+    if (signature.includes('t=')) {
+      const parts = new Map(
+        signature.split(',').map((p) => {
+          const idx = p.indexOf('=');
+          return [p.slice(0, idx).trim(), p.slice(idx + 1).trim()] as [string, string];
+        }),
+      );
+      const t = parts.get('t');
+      const s = parts.get('s');
+      if (!t || !s) return false;
+      const expected = crypto
+        .createHmac('sha256', secret)
+        .update(`${t}.${rawBody.toString('utf8')}`)
+        .digest('hex');
+      return safeEqualHex(s, expected);
+    }
+
+    const provided = signature.replace(/^sha256=/, '');
+    const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
+    return safeEqualHex(provided, expected);
   }
 
   // ─── HELPERS ─────────────────────────────────────────────────────────────────
@@ -465,17 +526,22 @@ export class PaymentsService {
   }
 
   private async confirmPayment(orderId: string, providerRef: string) {
-    await this.prisma.$transaction([
-      this.prisma.payment.update({
-        where: { orderId },
-        data: { status: 'COMPLETED', providerRef },
-      }),
-      this.prisma.order.update({
-        where: { id: orderId },
-        data: { status: 'PAYMENT_CONFIRMED' },
-      }),
-    ]);
-    this.logger.log(`Paiement confirmé pour commande ${orderId}`);
+    // Garde d'idempotence : ne confirme QUE si le paiement est encore PENDING.
+    // Un rejeu (webhook dupliqué) ne repasse pas COMPLETED → COMPLETED.
+    const res = await this.prisma.payment.updateMany({
+      where: { orderId, status: 'PENDING' },
+      data: { status: 'COMPLETED', providerRef },
+    });
+    if (res.count === 0) {
+      this.logger.warn(`confirmPayment ignoré (déjà traité) order=${orderId}`);
+      return;
+    }
+    // La commande ne bascule que depuis PENDING (transition unique gardée).
+    await this.prisma.order.updateMany({
+      where: { id: orderId, status: 'PENDING' },
+      data: { status: 'PAYMENT_CONFIRMED' },
+    });
+    this.logger.log(`Paiement confirmé (idempotent) order=${orderId}`);
   }
 
   private async failPayment(orderId: string) {
@@ -598,5 +664,139 @@ export class PaymentsService {
       take: 50,
     });
     return { message: 'Historique des paiements', data: orders };
+  }
+
+  // ─── REMBOURSEMENT (Lot 5A) ───────────────────────────────────────────────────
+  // Rembourse la commande à l'acheteur, de façon idempotente et « escrow-aware ».
+  // - Stripe  : vrai remboursement carte (refunds.create, idempotencyKey).
+  // - FedaPay / mobile money / autre : marqué REFUNDED, versement réel manuel (tracé).
+  // - Claw-back : si l'escrow a déjà été libéré au vendeur, on débite son wallet
+  //   (le solde peut devenir négatif = dette récupérée sur ventes futures).
+  // - Si l'escrow n'est pas encore libéré, on le neutralise pour que le vendeur ne
+  //   soit JAMAIS crédité pour cette commande remboursée.
+  async refundOrder(orderId: string, opts: { adminId?: string; reason?: string } = {}) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        payment: true,
+        buyer: { select: { id: true } },
+        seller: { select: { id: true } },
+      },
+    });
+    if (!order) throw new NotFoundException('Commande introuvable');
+    const payment = order.payment;
+    if (!payment) throw new BadRequestException('Aucun paiement à rembourser pour cette commande');
+
+    // Idempotence : déjà remboursé → no-op.
+    if (payment.refundedAt || payment.status === 'REFUNDED') {
+      return { message: 'Commande déjà remboursée', data: { alreadyRefunded: true } };
+    }
+    if (!['COMPLETED', 'DISPUTED'].includes(payment.status)) {
+      throw new BadRequestException(`Paiement non remboursable (statut ${payment.status})`);
+    }
+
+    const amount = payment.amount;
+    const isStripe = payment.method === 'STRIPE_CARD';
+    let providerRefundId: string | null = null;
+
+    // 1) Remboursement processeur AVANT le marquage DB.
+    //    L'idempotencyKey Stripe garantit qu'un retry (ou une course) ne rembourse jamais deux fois.
+    if (isStripe) {
+      if (!payment.providerRef) throw new BadRequestException('Référence Stripe manquante');
+      const session = await this.stripe.checkout.sessions.retrieve(payment.providerRef);
+      const paymentIntent = typeof session.payment_intent === 'string'
+        ? session.payment_intent
+        : session.payment_intent?.id;
+      if (!paymentIntent) throw new BadRequestException('PaymentIntent Stripe introuvable pour ce paiement');
+      const refund = await this.stripe.refunds.create(
+        { payment_intent: paymentIntent },
+        { idempotencyKey: `refund_${payment.id}` },
+      );
+      providerRefundId = refund.id;
+    }
+
+    // 2) Finalisation atomique + claw-back, gardée (idempotente même en concurrence).
+    const outcome = await this.prisma.$transaction(async (tx) => {
+      const claim = await tx.payment.updateMany({
+        where: { id: payment.id, refundedAt: null },
+        data: { status: 'REFUNDED', refundedAt: new Date(), refundAmount: amount },
+      });
+      if (claim.count === 0) return { alreadyRefunded: true, clawedBack: false };
+
+      await tx.order.updateMany({ where: { id: order.id }, data: { status: 'REFUNDED' } });
+
+      let clawedBack = false;
+      if (payment.escrowReleasedAt) {
+        // Escrow déjà libéré → reprendre au vendeur (solde peut devenir négatif).
+        await tx.sellerWallet.upsert({
+          where: { sellerId: order.sellerId },
+          update: { balance: { decrement: order.sellerAmount } },
+          create: { sellerId: order.sellerId, balance: -order.sellerAmount },
+        });
+        await tx.walletTransaction.create({
+          data: {
+            sellerId: order.sellerId,
+            orderId: order.id,
+            type: 'REFUND_DEBIT',
+            amount: order.sellerAmount,
+            label: `Remboursement ${order.orderNumber}`,
+          },
+        });
+        clawedBack = true;
+      } else {
+        // Escrow pas encore libéré → neutraliser pour que le vendeur ne soit jamais crédité.
+        await tx.payment.updateMany({
+          where: { id: payment.id, escrowReleasedAt: null },
+          data: { escrowReleasedAt: new Date() },
+        });
+      }
+      return { alreadyRefunded: false, clawedBack };
+    });
+
+    if (outcome.alreadyRefunded) {
+      return { message: 'Commande déjà remboursée', data: { alreadyRefunded: true } };
+    }
+
+    // 3) Notifications (inline, pas de dépendance module supplémentaire).
+    const manual = !isStripe;
+    await this.prisma.notification.create({
+      data: {
+        userId: order.buyerId,
+        type: 'SYSTEM',
+        title: 'Remboursement de votre commande',
+        body: manual
+          ? `Votre commande #${order.orderNumber} a été remboursée (${amount.toLocaleString()} XOF). Le versement Mobile Money est en cours de traitement.`
+          : `Votre commande #${order.orderNumber} a été remboursée (${amount.toLocaleString()} XOF) sur votre moyen de paiement.`,
+        data: { orderId: order.id },
+      },
+    });
+    await this.prisma.notification.create({
+      data: {
+        userId: order.sellerId,
+        type: 'SYSTEM',
+        title: 'Commande remboursée',
+        body: `La commande #${order.orderNumber} a été remboursée à l'acheteur.${outcome.clawedBack ? ` Le montant vendeur (${order.sellerAmount.toLocaleString()} XOF) a été repris sur votre portefeuille.` : ''}`,
+        data: { orderId: order.id },
+      },
+    });
+
+    this.logger.log(
+      `Refund commande ${order.orderNumber} (${amount} XOF, ${payment.method}, manual=${manual}, clawback=${outcome.clawedBack})` +
+      (opts.adminId ? ` par admin ${opts.adminId}` : ''),
+    );
+
+    return {
+      message: manual
+        ? 'Remboursement enregistré (versement Mobile Money à effectuer manuellement)'
+        : 'Remboursement effectué',
+      data: {
+        orderId: order.id,
+        amount,
+        method: payment.method,
+        manual,
+        clawedBack: outcome.clawedBack,
+        providerRefundId,
+      },
+    };
   }
 }

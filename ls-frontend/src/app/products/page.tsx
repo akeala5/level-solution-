@@ -4,6 +4,7 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import { useQuery, useInfiniteQuery } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
+import Image from 'next/image'
 import {
   X, Search, ChevronDown, LayoutGrid, List,
   MapPin, Truck, RefreshCw, Zap, Package, Filter,
@@ -76,9 +77,9 @@ function ProductRow({ product }: { product: Product }) {
       href={`/products/${product.slug}`}
       className="bg-white rounded-2xl border border-slate-100 flex gap-4 p-3 hover:shadow-md hover:border-indigo-100 transition-all group"
     >
-      <div className="w-32 h-24 rounded-xl overflow-hidden bg-slate-50 shrink-0">
+      <div className="w-32 h-24 rounded-xl overflow-hidden bg-slate-50 shrink-0 relative">
         {image
-          ? <img src={image} alt={product.title} className="w-full h-full object-cover" />
+          ? <Image src={image} alt={product.title} fill sizes="128px" className="object-cover" />
           : <div className="w-full h-full flex items-center justify-center"><Package size={28} className="text-slate-300" /></div>
         }
       </div>
