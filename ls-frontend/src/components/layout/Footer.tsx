@@ -13,7 +13,7 @@ export default function Footer() {
   }
 
   return (
-    <footer className="bg-[#1A1A2E] text-white">
+    <footer className="bg-[#12294A] text-white">
       {/* Trust bar */}
       <div className="border-b border-white/10">
         <div className="container-custom py-6">
@@ -25,7 +25,7 @@ export default function Footer() {
               { icon: Mail,   title: 'Support 7j/7',      desc: 'Réponse en moins de 24h' },
             ].map(({ icon: Icon, title, desc }) => (
               <div key={title} className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-xl bg-primary/30 flex items-center justify-center shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
                   <Icon size={20} className="text-accent" />
                 </div>
                 <div>
@@ -51,7 +51,7 @@ export default function Footer() {
           {/* Brand */}
           <div className="col-span-2">
             <div className="flex items-center gap-2 mb-4">
-              <div className="w-10 h-10 bg-gradient-accent rounded-xl flex items-center justify-center">
+              <div className="w-10 h-10 bg-accent rounded-xl flex items-center justify-center">
                 <span className="text-white font-black font-display text-xl">L</span>
               </div>
               <div>
@@ -64,7 +64,7 @@ export default function Footer() {
             </p>
             <div className="flex items-center gap-3 mt-4">
               {[Facebook, Instagram, Twitter, Youtube].map((Icon, i) => (
-                <a key={i} href="#" className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center hover:bg-accent/20 hover:text-accent transition-colors">
+                <a key={i} href="#" aria-label="Réseau social" className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center hover:bg-accent/20 hover:text-accent transition-colors">
                   <Icon size={16} />
                 </a>
               ))}
@@ -74,7 +74,7 @@ export default function Footer() {
             <div className="mt-5">
               <p className="text-sm font-semibold text-white/80 mb-2">Recevoir les meilleures offres</p>
               {subscribed ? (
-                <p className="text-xs text-success">✓ Vous êtes inscrit !</p>
+                <p className="text-xs text-accent">✓ Vous êtes inscrit !</p>
               ) : (
                 <form onSubmit={handleNewsletter} className="flex gap-2">
                   <input
@@ -85,7 +85,7 @@ export default function Footer() {
                     required
                     className="flex-1 bg-white/10 border border-white/20 rounded-xl px-3 py-2 text-xs text-white placeholder:text-white/40 focus:outline-none focus:border-accent min-w-0"
                   />
-                  <button type="submit" className="p-2 bg-accent rounded-xl hover:bg-accent/80 transition-colors shrink-0">
+                  <button type="submit" aria-label="S'inscrire" className="p-2 bg-accent rounded-xl hover:bg-accent-600 transition-colors shrink-0">
                     <Send size={14} className="text-white" />
                   </button>
                 </form>
@@ -93,7 +93,7 @@ export default function Footer() {
             </div>
           </div>
 
-          {/* Links */}
+          {/* Links — uniquement des routes qui existent */}
           {[
             {
               title: 'Marketplace',
@@ -108,21 +108,19 @@ export default function Footer() {
             {
               title: 'Vendeurs',
               links: [
-                { label: 'Publier une annonce', href: '/dashboard/products/new' },
+                { label: 'Publier une annonce', href: '/products/create' },
                 { label: 'Forfaits & Tarifs', href: '/pricing' },
-                { label: 'Guide vendeur', href: '/guide-vendeur' },
-                { label: 'Statistiques', href: '/dashboard' },
                 { label: 'Boutique Pro', href: '/pricing#pro' },
+                { label: 'Mon tableau de bord', href: '/dashboard' },
               ],
             },
             {
               title: 'Aide',
               links: [
                 { label: 'Comment ça marche', href: '/how-it-works' },
-                { label: 'Centre d\'aide', href: '/help' },
-                { label: 'Politique de retour', href: '/returns' },
-                { label: 'Signaler un problème', href: '/report' },
+                { label: "Centre d'aide", href: '/help' },
                 { label: 'Contacter le support', href: '/contact' },
+                { label: 'Premium acheteur', href: '/premium' },
               ],
             },
           ].map(({ title, links }) => (
@@ -143,21 +141,19 @@ export default function Footer() {
 
         {/* Contact */}
         <div className="mt-8 pt-8 border-t border-white/10">
-          <div className="flex flex-col md:flex-row gap-4 md:items-center">
-            <div className="flex flex-wrap gap-4 text-sm text-white/55">
-              <a href="mailto:support@ls-marketplace.com" className="flex items-center gap-2 hover:text-white transition-colors">
-                <Mail size={14} className="text-accent" />
-                support@ls-marketplace.com
-              </a>
-              <a href="tel:+22891000000" className="flex items-center gap-2 hover:text-white transition-colors">
-                <Phone size={14} className="text-accent" />
-                +228 91 00 00 00
-              </a>
-              <span className="flex items-center gap-2">
-                <MapPin size={14} className="text-accent" />
-                Lomé, Togo
-              </span>
-            </div>
+          <div className="flex flex-wrap gap-4 text-sm text-white/55">
+            <a href="mailto:support@lsgrouptogo.com" className="flex items-center gap-2 hover:text-white transition-colors">
+              <Mail size={14} className="text-accent" />
+              support@lsgrouptogo.com
+            </a>
+            <a href="https://wa.me/22890009385" className="flex items-center gap-2 hover:text-white transition-colors">
+              <Phone size={14} className="text-accent" />
+              WhatsApp : +228 90 00 93 85
+            </a>
+            <span className="flex items-center gap-2">
+              <MapPin size={14} className="text-accent" />
+              Lomé, Togo
+            </span>
           </div>
         </div>
       </div>
@@ -167,9 +163,8 @@ export default function Footer() {
         <div className="container-custom py-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-white/40">
           <span>© {new Date().getFullYear()} LS Marketplace. Tous droits réservés.</span>
           <div className="flex gap-4">
-            <Link href="/legal/cgu" className="hover:text-white transition-colors">CGU</Link>
-            <Link href="/legal/privacy" className="hover:text-white transition-colors">Confidentialité</Link>
-            <Link href="/legal/cookies" className="hover:text-white transition-colors">Cookies</Link>
+            <Link href="/legal" className="hover:text-white transition-colors">Mentions légales</Link>
+            <Link href="/privacy" className="hover:text-white transition-colors">Confidentialité</Link>
           </div>
         </div>
       </div>

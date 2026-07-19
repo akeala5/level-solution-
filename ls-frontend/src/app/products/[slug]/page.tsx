@@ -22,6 +22,7 @@ import { Product, Review } from '@/types'
 import { cn, formatPrice, timeAgo, getConditionLabel, imgBlurDataURL } from '@/lib/utils'
 import ProductCard from '@/components/product/ProductCard'
 import ReportProductButton from '@/components/product/ReportProductButton'
+import ProductImage from '@/components/product/ProductImage'
 import { useRecentlyViewed } from '@/hooks/useRecentlyViewed'
 
 const CONDITION_COLORS: Record<string, string> = {
@@ -191,8 +192,8 @@ export default function ProductDetailPage() {
                           className="relative aspect-[4/3] cursor-zoom-in group"
                           onClick={() => setLightbox(true)}
                         >
-                          <Image
-                            src={img.url || '/placeholder.jpg'}
+                          <ProductImage
+                            src={img.url || '/placeholder.svg'}
                             alt={product.title}
                             fill
                             className="object-contain p-4"
@@ -209,7 +210,7 @@ export default function ProductDetailPage() {
                   </Swiper>
 
                   {/* Badges */}
-                  <div className="absolute top-3 left-3 flex flex-col gap-1.5 z-10 pointer-events-none">
+                  <div className="absolute top-3 left-3 flex flex-col items-start gap-2 z-10 pointer-events-none">
                     {discount > 0 && <span className="badge bg-danger text-white text-xs font-bold px-2 py-0.5">-{discount}%</span>}
                     {product.isReconditioned && (
                       <span className="flex items-center gap-1 bg-accent text-white text-xs font-bold px-2 py-0.5 rounded-full">

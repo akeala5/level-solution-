@@ -1,6 +1,6 @@
 'use client'
 import Link from 'next/link'
-import Image from 'next/image'
+import ProductImage from './ProductImage'
 import { Heart, Star, MapPin, Shield, Zap, Package, Eye, ShoppingCart, MessageSquare, Truck, RefreshCw, BadgeCheck, GitCompare, Flame, Clock, Layers } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { Product } from '@/types'
@@ -100,7 +100,7 @@ export default function ProductCard({ product, onFavoriteToggle }: Props) {
         {/* ── Image 100% propre — aucun élément flottant ── */}
         <div className="relative aspect-[4/3] bg-slate-50 overflow-hidden">
           {image ? (
-            <Image
+            <ProductImage
               src={image}
               alt={product.title}
               fill

@@ -1,238 +1,128 @@
 'use client'
 import Link from 'next/link'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { motion, AnimatePresence } from 'framer-motion'
-import { Search, Shield, Zap, Award, Laptop, Cpu, Wifi, Monitor, HardDrive, Printer, Smartphone, Camera, Headphones, Keyboard, Plus } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { Search, Shield, Zap, Award, Plus, LayoutGrid, Flame, ArrowRight } from 'lucide-react'
 import { useTranslations } from 'next-intl'
+import api from '@/lib/api'
+import { Product } from '@/types'
+import { formatPrice } from '@/lib/utils'
+import ProductImage from '@/components/product/ProductImage'
 
-const TRENDING = ['Laptop gaming', 'RTX 4080', 'MacBook Pro', 'iPhone recondit.', 'Switch réseau']
+const TRENDING = ['RTX 4080', 'MacBook Pro', 'iPhone recondit.', 'Switch réseau']
+const CONDITION: Record<string, string> = {
+  NEW: 'Neuf', VERY_GOOD: 'Très bon état', GOOD: 'Bon état', FAIR: 'État correct', FOR_PARTS: 'Pour pièces',
+}
 
-const floatingCards = [
-  { icon: Laptop,    label: 'MacBook Air M2',    price: '850 000 FCFA',   badge: 'Reconditionné LS', color: 'from-blue-500 to-blue-600',    topColor: '#3B82F6', delay: 0    },
-  { icon: Cpu,       label: 'RTX 4080 16GB',     price: '1 200 000 FCFA', badge: 'Neuf',             color: 'from-purple-500 to-purple-600', topColor: '#A855F7', delay: 0.08 },
-  { icon: Wifi,      label: 'Cisco Switch 24p',  price: '350 000 FCFA',   badge: 'Très bon état',    color: 'from-green-500 to-green-600',   topColor: '#22C55E', delay: 0.16 },
-  { icon: Monitor,   label: 'Écran LG 27" 4K',   price: '420 000 FCFA',   badge: 'Neuf',             color: 'from-orange-500 to-orange-600', topColor: '#F97316', delay: 0.24 },
-  { icon: HardDrive, label: 'SSD Samsung 2TB',   price: '95 000 FCFA',    badge: 'Neuf',             color: 'from-cyan-500 to-cyan-600',     topColor: '#06B6D4', delay: 0.32 },
-  { icon: Printer,   label: 'HP LaserJet Pro',   price: '180 000 FCFA',   badge: 'Bon état',         color: 'from-rose-500 to-rose-600',     topColor: '#F43F5E', delay: 0.4  },
-  { icon: Laptop,    label: 'Dell XPS 15 OLED',  price: '980 000 FCFA',   badge: 'Reconditionné LS', color: 'from-indigo-500 to-indigo-600', topColor: '#6366F1', delay: 0.48 },
-]
-
-const carouselProducts = [
-  { icon: Smartphone, label: 'iPhone 15 Pro',      color: 'from-gray-700 to-gray-900',    badge: 'Neuf' },
-  { icon: Laptop,     label: 'ThinkPad X1 Carbon', color: 'from-red-600 to-red-800',      badge: 'Recondit.' },
-  { icon: Camera,     label: 'Canon EOS R50',       color: 'from-gray-600 to-gray-800',    badge: 'Neuf' },
-  { icon: Headphones, label: 'Sony WH-1000XM5',    color: 'from-slate-600 to-slate-800',  badge: 'Neuf' },
-  { icon: Monitor,    label: 'Dell U2723D 27"',     color: 'from-blue-700 to-blue-900',    badge: 'Neuf' },
-  { icon: Keyboard,   label: 'Keychron Q5 Pro',     color: 'from-amber-600 to-amber-800',  badge: 'Neuf' },
-  { icon: Cpu,        label: 'Ryzen 9 7950X',       color: 'from-orange-600 to-orange-800',badge: 'Neuf' },
-  { icon: HardDrive,  label: 'NAS Synology DS923+', color: 'from-teal-600 to-teal-800',    badge: 'Neuf' },
-  { icon: Smartphone, label: 'Samsung S24 Ultra',   color: 'from-violet-600 to-violet-800',badge: 'Neuf' },
-  { icon: Wifi,       label: 'UniFi Dream Router',  color: 'from-cyan-600 to-cyan-800',    badge: 'Neuf' },
-]
+function HotCard({ p }: { p?: Product }) {
+  if (!p) {
+    return (
+      <div className="rounded-xl overflow-hidden bg-card border border-border animate-pulse">
+        <div className="aspect-[4/3] bg-surface" />
+        <div className="p-2.5 space-y-2"><div className="h-3 bg-surface rounded w-3/4" /><div className="h-3 bg-surface rounded w-1/2" /></div>
+      </div>
+    )
+  }
+  const disc = p.originalPrice && p.originalPrice > p.price ? Math.round((1 - p.price / p.originalPrice) * 100) : 0
+  const label = p.isReconditioned ? 'Reconditionné LS' : (CONDITION[p.condition] || '')
+  return (
+    <Link href={`/products/${p.slug}`}
+      className="group rounded-xl overflow-hidden bg-card border border-border shadow-card hover:shadow-card-hover transition-shadow">
+      <div className="relative aspect-[4/3] bg-surface">
+        {disc > 0 && <span className="absolute top-1.5 left-1.5 z-10 bg-danger text-white text-[10px] font-extrabold px-1.5 py-0.5 rounded-full">-{disc}%</span>}
+        <ProductImage src={p.images?.[0]?.url || '/placeholder.svg'} alt={p.title} fill className="object-cover" sizes="200px" />
+      </div>
+      <div className="p-2.5">
+        <p className="text-[12px] font-semibold text-dark leading-tight line-clamp-1 mb-1">{p.title}</p>
+        <div className="text-[13.5px] font-extrabold text-primary">{formatPrice(p.price)}</div>
+        {label && <div className="flex items-center gap-1.5 mt-1 text-[10.5px] text-muted"><span className="w-1.5 h-1.5 rounded-full bg-accent" />{label}</div>}
+      </div>
+    </Link>
+  )
+}
 
 export default function HeroSection() {
   const router = useRouter()
   const [search, setSearch] = useState('')
-  const [slideIndex, setSlideIndex] = useState(0)
-  const [hovered, setHovered] = useState(false)
+  const t = useTranslations('hero')
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setSlideIndex(i => (i + 1) % carouselProducts.length)
-    }, 17000)
-    return () => clearInterval(timer)
-  }, [])
+  const { data: hot } = useQuery({
+    queryKey: ['hero-hot'],
+    queryFn: () => api.get('/products', { params: { sortBy: 'popular', limit: 4 } }).then((r) => r.data.data as Product[]),
+  })
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
-    if (search.trim()) router.push(`/products?search=${encodeURIComponent(search)}`)
-    else router.push('/products')
+    router.push(search.trim() ? `/products?search=${encodeURIComponent(search)}` : '/products')
   }
 
-  const slide = carouselProducts[slideIndex]
-  const t = useTranslations('hero')
+  const hotList = hot ? hot.slice(0, 4) : [undefined, undefined, undefined, undefined]
 
   return (
-    <section className="relative overflow-hidden bg-gradient-hero min-h-[640px] flex items-center">
-      {/* Background pattern */}
-      <div className="absolute inset-0 opacity-5">
-        <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '40px 40px' }} />
-      </div>
-      <div className="absolute top-20 left-1/4 w-96 h-96 bg-accent/20 rounded-full blur-3xl" />
-      <div className="absolute bottom-0 right-1/4 w-64 h-64 bg-primary-400/20 rounded-full blur-3xl" />
+    <section className="relative overflow-hidden bg-[#12294A] text-white">
+      <div className="pointer-events-none absolute inset-0 opacity-60"
+        style={{ background: 'radial-gradient(1100px 340px at 78% -40%, rgba(39,174,96,.16), transparent 60%)' }} />
 
-      <div className="container-custom relative z-10 py-16 lg:py-20">
-        <div className="grid lg:grid-cols-[1fr_160px_220px] gap-8 items-center">
+      <div className="container-custom relative z-10 py-8 lg:py-10">
+        <div className="grid lg:grid-cols-[1.15fr_.85fr] gap-8 items-center">
 
-          {/* ── COL 1 : Texte hero ── */}
-          <div>
-            <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
-              <div className="inline-flex items-center gap-2 bg-white/10 text-white/90 text-xs font-medium px-4 py-2 rounded-full border border-white/20 mb-6">
-                <Zap size={12} className="text-yellow-400" />
-                {t('badge')}
-              </div>
+          {/* Gauche : accroche + recherche */}
+          <div className="animate-fade-in">
+            <span className="inline-flex items-center gap-2 text-[12.5px] font-semibold text-[#CFE9DB] bg-accent/15 border border-accent/30 px-3 py-1.5 rounded-full mb-3.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-accent" /> {t('badge')}
+            </span>
 
-              <h1 className="heading-xl text-white mb-4">
-                {t('title_part1')}{' '}
-                <span className="text-yellow-400">{t('title_highlight')}</span>{' '}
-                {t('title_part2')}
-              </h1>
+            <h1 className="text-3xl lg:text-[38px] font-extrabold leading-[1.08] tracking-tight mb-3 text-white">
+              {t('title_part1')} <span className="text-accent">{t('title_highlight')}</span> {t('title_part2')}
+            </h1>
 
-              <p className="text-white/70 text-lg leading-relaxed mb-8 max-w-xl">
-                {t('subtitle')}
-              </p>
+            <p className="text-[#AFC0D8] text-[15px] leading-relaxed mb-4 max-w-[44ch]">{t('subtitle')}</p>
 
-              {/* Search */}
-              <form onSubmit={handleSearch} className="mb-4">
-                <div className="flex gap-2 bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-1.5">
-                  <input
-                    type="text"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder={t('search_placeholder')}
-                    className="flex-1 bg-transparent text-white placeholder:text-white/50 px-4 py-3 text-sm focus:outline-none"
-                  />
-                  <button type="submit" className="btn-accent rounded-xl px-6 py-3 shrink-0 flex items-center gap-1">
-                    <Search size={18} />
-                    <span className="hidden sm:inline text-sm font-semibold">{t('search_btn')}</span>
-                  </button>
-                </div>
-              </form>
-
-              {/* Trending */}
-              <div className="flex items-center flex-wrap gap-2 mb-5">
-                <span className="text-white/50 text-xs">{t('trending')}</span>
-                {TRENDING.map((term) => (
-                  <button key={term}
-                    onClick={() => router.push(`/products?search=${encodeURIComponent(term)}`)}
-                    className="text-xs text-white/70 hover:text-white bg-white/10 hover:bg-white/20 px-3 py-1 rounded-full border border-white/10 transition-all">
-                    {term}
-                  </button>
-                ))}
-              </div>
-
-              {/* CTAs */}
-              <div className="flex flex-wrap items-center gap-3 mt-2">
-                <Link href="/products/create"
-                  className="flex items-center gap-2 bg-yellow-400 hover:bg-yellow-300 text-dark font-bold px-5 py-2.5 rounded-xl text-sm transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5">
-                  <Zap size={16} /> {t('cta_sell')}
-                </Link>
-                <Link href="/products"
-                  className="flex items-center gap-2 bg-white/15 hover:bg-white/25 text-white border border-white/20 px-5 py-2.5 rounded-xl text-sm font-medium transition-all">
-                  <Search size={15} /> {t('cta_browse')}
-                </Link>
-              </div>
-
-              {/* Trust */}
-              <div className="flex flex-wrap gap-4 mt-5">
-                {[
-                  { icon: Shield, text: t('trust_escrow') },
-                  { icon: Zap,    text: t('trust_mobile') },
-                  { icon: Award,  text: t('trust_verified') },
-                ].map(({ icon: Icon, text }) => (
-                  <div key={text} className="flex items-center gap-2 text-white/60 text-xs">
-                    <Icon size={13} className="text-accent" />
-                    {text}
-                  </div>
-                ))}
-              </div>
-            </motion.div>
-          </div>
-
-          {/* ── COL 2 : Slideshow ── */}
-          <div className="hidden lg:flex flex-col items-center justify-center h-[520px]">
-            <div aria-live="polite" aria-atomic="true" className="sr-only">
-              {carouselProducts[slideIndex].label}
-            </div>
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={slideIndex}
-                initial={{ opacity: 0, y: 40 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -40 }}
-                transition={{ duration: 0.6, ease: 'easeInOut' }}
-                onMouseEnter={() => setHovered(true)}
-                onMouseLeave={() => setHovered(false)}
-                whileHover={{ scale: 1.04, y: -4 }}
-                className="rounded-xl overflow-hidden border border-white/10 w-full cursor-pointer"
-                style={{
-                  background: 'rgba(255,255,255,0.12)',
-                  backdropFilter: 'blur(8px)',
-                  boxShadow: hovered ? `0 8px 40px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.2)` : 'none',
-                  transition: 'box-shadow 0.3s ease',
-                }}
-              >
-                {/* Image simulée */}
-                <div className={`h-36 bg-gradient-to-br ${slide.color} flex items-center justify-center relative overflow-hidden`}>
-                  <slide.icon
-                    size={48}
-                    className="text-white/30 transition-all duration-300"
-                    style={{ transform: hovered ? 'scale(1.2)' : 'scale(1)', opacity: hovered ? 0.5 : 0.3 }}
-                  />
-                  {/* Overlay au survol */}
-                  <div
-                    className="absolute inset-0 bg-black/20 flex items-center justify-center transition-opacity duration-300"
-                    style={{ opacity: hovered ? 1 : 0 }}
-                  >
-                    <span className="text-white text-xs font-bold bg-white/20 backdrop-blur-sm px-3 py-1.5 rounded-full border border-white/30">
-                      Voir l&apos;annonce →
-                    </span>
-                  </div>
-                  <span className="absolute top-2 right-2 text-[9px] font-bold bg-white/20 text-white px-1.5 py-0.5 rounded-full">
-                    {slide.badge}
-                  </span>
-                </div>
-                <div className="px-3 py-2.5">
-                  <div className="text-white text-xs font-semibold truncate">{slide.label}</div>
-                </div>
-              </motion.div>
-            </AnimatePresence>
-
-            {/* Dots */}
-            <div role="tablist" aria-label={t('slideshow_label')} className="flex gap-1.5 mt-4">
-              {carouselProducts.map((product, i) => (
-                <button
-                  key={i}
-                  role="tab"
-                  aria-selected={i === slideIndex}
-                  aria-label={t('slide_aria', { label: product.label, current: i + 1, total: carouselProducts.length })}
-                  onClick={() => setSlideIndex(i)}
-                  className={`rounded-full transition-all duration-300 ${
-                    i === slideIndex ? 'w-4 h-1.5 bg-white' : 'w-1.5 h-1.5 bg-white/30'
-                  }`}
-                />
+            <div className="flex flex-wrap gap-2 mb-4">
+              {[{ icon: Shield, text: t('trust_escrow') }, { icon: Zap, text: t('trust_mobile') }, { icon: Award, text: t('trust_verified') }].map(({ icon: Icon, text }) => (
+                <span key={text} className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-[#DCE6F3] bg-white/[0.06] border border-white/[0.12] px-3 py-1.5 rounded-full">
+                  <Icon size={15} className="text-accent" /> {text}
+                </span>
               ))}
             </div>
+
+            <form onSubmit={handleSearch} className="flex bg-card rounded-2xl overflow-hidden h-14 max-w-[560px] shadow-[0_8px_24px_rgba(0,0,0,0.22)]">
+              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('search_placeholder')}
+                className="flex-1 bg-transparent text-dark placeholder:text-muted px-5 text-[15.5px] focus:outline-none" aria-label={t('search_placeholder')} />
+              <button type="submit" className="bg-accent hover:bg-accent-600 text-white font-bold text-[14.5px] px-6 flex items-center gap-2 transition-colors">
+                <Search size={18} /> <span className="hidden sm:inline">{t('search_btn')}</span>
+              </button>
+            </form>
+
+            <div className="flex items-center flex-wrap gap-2 mt-3.5 text-[12.5px]">
+              <span className="text-white/50">{t('trending')}</span>
+              {TRENDING.map((term) => (
+                <button key={term} onClick={() => router.push(`/products?search=${encodeURIComponent(term)}`)}
+                  className="text-[#CBD8EC] bg-white/[0.06] hover:bg-white/[0.13] hover:text-white border border-white/[0.10] px-3 py-1 rounded-full transition-colors">{term}</button>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap gap-3 mt-5">
+              <Link href="/products/create" className="inline-flex items-center gap-2 h-12 px-5 rounded-xl bg-accent hover:bg-accent-600 text-white font-bold text-[14.5px] transition-colors">
+                <Plus size={18} /> {t('cta_sell')}
+              </Link>
+              <Link href="/products" className="inline-flex items-center gap-2 h-12 px-5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-white border border-white/[0.16] font-semibold text-[14.5px] transition-colors">
+                <LayoutGrid size={17} /> {t('cta_browse')}
+              </Link>
+            </div>
           </div>
 
-          {/* ── COL 3 : Cartes produits ── */}
-          <div className="hidden lg:flex flex-col gap-2 justify-center items-end">
-            {floatingCards.map((card, i) => (
-              <motion.div
-                key={card.label}
-                initial={{ opacity: 0, x: 30 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.4, delay: card.delay + 0.2 }}
-                className="bg-white/20 backdrop-blur-md rounded-xl p-3.5 flex items-center gap-3 w-52 border border-white/10"
-                style={{
-                  animation: `bounceSoft ${2.8 + i * 0.3}s ease-in-out infinite ${i * 0.25}s`,
-                  borderTop: `2px solid ${card.topColor}`,
-                  boxShadow: '0 4px 20px rgba(0,0,0,0.2)',
-                }}
-              >
-                <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${card.color} flex items-center justify-center shrink-0`}>
-                  <card.icon size={18} className="text-white" />
-                </div>
-                <div className="min-w-0">
-                  <div className="font-semibold text-white text-sm leading-tight truncate">{card.label}</div>
-                  <div className="text-yellow-400 font-bold text-sm mt-0.5">{card.price}</div>
-                  <div className="text-[11px] text-white/60">{card.badge}</div>
-                </div>
-              </motion.div>
-            ))}
+          {/* Droite : En ce moment (vrais produits) */}
+          <div className="hidden lg:block rounded-2xl bg-white/[0.05] border border-white/[0.10] p-3.5 animate-fade-in">
+            <div className="flex items-center justify-between px-1 mb-3">
+              <span className="flex items-center gap-2 font-bold text-[13.5px] text-white/95"><Flame size={16} className="text-amber-400" /> En ce moment</span>
+              <Link href="/products?sortBy=popular" className="text-[12px] text-white/60 hover:text-white flex items-center gap-1">Voir tout <ArrowRight size={12} /></Link>
+            </div>
+            <div className="grid grid-cols-2 gap-2.5">
+              {hotList.map((p, i) => <HotCard key={p?.id ?? i} p={p} />)}
+            </div>
           </div>
-
         </div>
       </div>
     </section>

@@ -13,6 +13,7 @@ const nextConfig = {
       { protocol: 'https', hostname: 'cdn.ls-marketplace.com' },
       { protocol: 'https', hostname: 'images.unsplash.com' },
       { protocol: 'https', hostname: 'via.placeholder.com' },
+      { protocol: 'https', hostname: 'placehold.co' },
     ],
     formats: ['image/webp', 'image/avif'],
   },

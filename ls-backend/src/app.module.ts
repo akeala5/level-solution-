@@ -34,6 +34,7 @@ import { RolesGuard } from './common/guards/roles.guard';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import { HealthController } from './common/health/health.controller';
+import { StatsController } from './common/stats/stats.controller';
 import { EscrowReleaseJob } from './common/jobs/escrow-release.job';
 import { SubscriptionExpiryJob } from './common/jobs/subscription-expiry.job';
 import { AuctionCloseJob } from './common/jobs/auction-close.job';
@@ -96,7 +97,7 @@ import { StockReservationJob } from './common/jobs/stock-reservation.job';
     WalletModule,
     ReportsModule,
   ],
-  controllers: [HealthController],
+  controllers: [HealthController, StatsController],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: ThrottlerGuard },
