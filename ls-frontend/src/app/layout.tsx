@@ -55,13 +55,27 @@ export const viewport: Viewport = {
 
 const jsonLd = {
   '@context': 'https://schema.org',
-  '@type': 'Organization',
-  name: 'LS Marketplace',
-  url: SITE_URL,
-  logo: `${SITE_URL}/logo.png`,
-  description: 'La marketplace N°1 pour acheter et vendre des équipements informatiques en Afrique.',
-  contactPoint: { '@type': 'ContactPoint', contactType: 'customer service', availableLanguage: ['French', 'English'] },
-  areaServed: ['TG', 'CI', 'SN'],
+  '@graph': [
+    {
+      '@type': 'Organization',
+      name: 'LS Marketplace',
+      url: SITE_URL,
+      logo: `${SITE_URL}/logo.png`,
+      description: 'La marketplace N°1 pour acheter et vendre des équipements informatiques en Afrique.',
+      contactPoint: { '@type': 'ContactPoint', contactType: 'customer service', availableLanguage: ['French', 'English'] },
+      areaServed: ['TG', 'CI', 'SN'],
+    },
+    {
+      '@type': 'WebSite',
+      name: 'LS Marketplace',
+      url: SITE_URL,
+      potentialAction: {
+        '@type': 'SearchAction',
+        target: { '@type': 'EntryPoint', urlTemplate: `${SITE_URL}/products?search={search_term_string}` },
+        'query-input': 'required name=search_term_string',
+      },
+    },
+  ],
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {

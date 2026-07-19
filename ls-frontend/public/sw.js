@@ -1,72 +1,99 @@
-const CACHE_VERSION = 'ls-marketplace-v1'
+// Service worker LS Marketplace.
+// v2 (2026-07-19) : correctif du piege « cache-first sur les scripts » qui servait
+// d'anciens bundles apres deploiement. Strategie corrigee ci-dessous.
+// IMPORTANT : bumper CACHE_VERSION a chaque changement critique de ce fichier.
+const CACHE_VERSION = 'ls-marketplace-v2'
 const STATIC_CACHE = `${CACHE_VERSION}-static`
-const DYNAMIC_CACHE = `${CACHE_VERSION}-dynamic`
+const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`
 
-const STATIC_ASSETS = [
-  '/',
-  '/products',
-  '/categories',
-  '/auth/login',
-  '/auth/register',
-  '/offline',
-]
+const OFFLINE_URL = '/offline'
+const PRECACHE = ['/offline']
 
-// Installation : mise en cache des assets statiques
+// Installation : on ne precache QUE la page offline (plus jamais les routes HTML,
+// source de la peremption). Le nouveau SW prend la main immediatement (skipWaiting).
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(STATIC_CACHE).then((cache) => cache.addAll(STATIC_ASSETS)).then(() => self.skipWaiting())
+    caches.open(STATIC_CACHE).then((c) => c.addAll(PRECACHE)).then(() => self.skipWaiting())
   )
 })
 
-// Activation : suppression des anciens caches
+// Activation : purge TOUS les caches d'anciennes versions (prefixe != version courante),
+// puis prend le controle des onglets ouverts.
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys.filter((k) => k !== STATIC_CACHE && k !== DYNAMIC_CACHE).map((k) => caches.delete(k))
-      )
-    ).then(() => self.clients.claim())
+    caches
+      .keys()
+      .then((keys) => Promise.all(keys.filter((k) => !k.startsWith(CACHE_VERSION)).map((k) => caches.delete(k))))
+      .then(() => self.clients.claim())
   )
 })
 
-// Fetch : stratégie Network-first pour les API, Cache-first pour les assets
 self.addEventListener('fetch', (event) => {
-  const url = new URL(event.request.url)
+  const req = event.request
+  if (req.method !== 'GET') return
+  const url = new URL(req.url)
 
-  // Toujours réseau pour les appels API
-  if (url.pathname.startsWith('/api/') || url.hostname !== self.location.hostname) {
-    event.respondWith(fetch(event.request).catch(() => new Response('{"error":"offline"}', { headers: { 'Content-Type': 'application/json' } })))
+  // 1) Cross-origin ou API : reseau uniquement, fallback JSON hors-ligne.
+  if (url.origin !== self.location.origin || url.pathname.startsWith('/api/')) {
+    event.respondWith(
+      fetch(req).catch(
+        () => new Response('{"error":"offline"}', { headers: { 'Content-Type': 'application/json' } })
+      )
+    )
     return
   }
 
-  // Cache-first pour les assets statiques (images, fonts, CSS, JS)
-  if (event.request.destination === 'image' || event.request.destination === 'font' || event.request.destination === 'style' || event.request.destination === 'script') {
+  // 2) Assets immuables Next (hashes) : cache-first SUR — une nouvelle build = nouvelle URL,
+  //    donc jamais de peremption possible. Rapide et sans risque.
+  if (url.pathname.startsWith('/_next/static/')) {
     event.respondWith(
-      caches.match(event.request).then((cached) => {
-        if (cached) return cached
-        return fetch(event.request).then((response) => {
-          const clone = response.clone()
-          caches.open(DYNAMIC_CACHE).then((cache) => cache.put(event.request, clone))
-          return response
-        })
+      caches.match(req).then(
+        (cached) =>
+          cached ||
+          fetch(req).then((res) => {
+            const clone = res.clone()
+            caches.open(RUNTIME_CACHE).then((c) => c.put(req, clone))
+            return res
+          })
+      )
+    )
+    return
+  }
+
+  // 3) Images / polices (potentiellement non hashees) : stale-while-revalidate.
+  if (req.destination === 'image' || req.destination === 'font') {
+    event.respondWith(
+      caches.match(req).then((cached) => {
+        const network = fetch(req)
+          .then((res) => {
+            const clone = res.clone()
+            caches.open(RUNTIME_CACHE).then((c) => c.put(req, clone))
+            return res
+          })
+          .catch(() => cached)
+        return cached || network
       })
     )
     return
   }
 
-  // Network-first pour les pages HTML
+  // 4) Tout le reste (navigations, RSC, HTML, CSS/JS non hashes) : network-first.
+  //    Document toujours frais => references de chunks toujours a jour => plus JAMAIS
+  //    de bundle perime. Fallback cache, puis page /offline pour les navigations.
   event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        const clone = response.clone()
-        caches.open(DYNAMIC_CACHE).then((cache) => cache.put(event.request, clone))
-        return response
+    fetch(req)
+      .then((res) => {
+        const clone = res.clone()
+        caches.open(RUNTIME_CACHE).then((c) => c.put(req, clone))
+        return res
       })
-      .catch(() => caches.match(event.request).then((cached) => cached || caches.match('/offline')))
+      .catch(() =>
+        caches.match(req).then((cached) => cached || (req.mode === 'navigate' ? caches.match(OFFLINE_URL) : undefined))
+      )
   )
 })
 
-// Push notifications
+// ─── Push notifications (INCHANGE) ──────────────────────────────────────────────
 self.addEventListener('push', (event) => {
   if (!event.data) return
   const data = event.data.json()
