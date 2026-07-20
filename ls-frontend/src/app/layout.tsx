@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Toaster } from 'react-hot-toast'
 import { NextIntlClientProvider } from 'next-intl'
+import { headers } from 'next/headers'
 import { getLocale, getMessages, getTranslations } from 'next-intl/server'
 import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
@@ -82,6 +83,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const locale = await getLocale()
   const messages = await getMessages()
   const t = await getTranslations('common')
+  const nonce = headers().get('x-nonce') ?? undefined
 
   return (
     <html lang={locale} suppressHydrationWarning>
@@ -90,6 +92,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <link rel="dns-prefetch" href="https://api.shop.lsgrouptogo.com" />
         <script
           type="application/ld+json"
+          nonce={nonce}
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
       </head>
@@ -98,7 +101,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           {t('skip_to_content')}
         </a>
         <NextIntlClientProvider messages={messages}>
-          <Providers>
+          <Providers nonce={nonce}>
             <ServiceWorkerRegistration />
             <div className="flex flex-col min-h-screen">
               <Header />
