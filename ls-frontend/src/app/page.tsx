@@ -1,6 +1,9 @@
 import { Suspense } from 'react'
 import Link from 'next/link'
 import { ShieldCheck, ArrowRight } from 'lucide-react'
+import { HydrationBoundary, dehydrate } from '@tanstack/react-query'
+import { getServerQueryClient } from '@/lib/get-query-client'
+import { serverGet } from '@/lib/server-fetch'
 import HeroSection from '@/components/home/HeroSection'
 import NowShowcase from '@/components/home/NowShowcase'
 import SponsoredBanner from '@/components/home/SponsoredBanner'
@@ -15,7 +18,7 @@ import type { Metadata } from 'next'
 export const revalidate = 300
 
 export const metadata: Metadata = {
-  title: 'LS Marketplace — Achetez & Vendez vos équipements informatiques',
+  title: 'LS Marketplace — Achetez & Vendez en toute sécurité',
 }
 
 function ReconBand() {
@@ -37,20 +40,50 @@ function ReconBand() {
   )
 }
 
-export default function HomePage() {
+export default async function HomePage() {
+  // Prefetch serveur des données PUBLIQUES de la home, avec les MÊMES queryKey
+  // que les composants clients → hydratation : aucun fetch client au 1er rendu.
+  // allSettled : une API en panne au build ne casse pas la page (le composant
+  // concerné retombera sur son fetch client).
+  const queryClient = getServerQueryClient()
+  await Promise.allSettled([
+    queryClient.prefetchQuery({
+      queryKey: ['home-categories'],
+      queryFn: () => serverGet('/categories'),
+    }),
+    queryClient.prefetchQuery({
+      queryKey: ['hero-hot'],
+      queryFn: () => serverGet('/products?sortBy=popular&limit=12'),
+    }),
+    queryClient.prefetchQuery({
+      queryKey: ['featured-products', 'newest'],
+      queryFn: () => serverGet('/products?sortBy=newest&limit=8'),
+    }),
+    queryClient.prefetchQuery({
+      queryKey: ['platform-stats'],
+      queryFn: () => serverGet('/stats'),
+    }),
+    queryClient.prefetchQuery({
+      queryKey: ['sponsored-featured', 8],
+      queryFn: () => serverGet('/sponsored-ads/featured?limit=8'),
+    }),
+  ])
+
   return (
-    <div>
-      <HeroSection />
-      <NowShowcase />
-      <CategoriesSection />
-      <SponsoredBanner />
-      <ReconBand />
-      <Suspense fallback={<div className="h-96" />}>
-        <FeaturedProducts />
-      </Suspense>
-      <RecentlyViewedSection />
-      <StatsSection />
-      <WhyLSSection />
-    </div>
+    <HydrationBoundary state={dehydrate(queryClient)}>
+      <div>
+        <HeroSection />
+        <NowShowcase />
+        <CategoriesSection />
+        <SponsoredBanner />
+        <ReconBand />
+        <Suspense fallback={<div className="h-96" />}>
+          <FeaturedProducts />
+        </Suspense>
+        <RecentlyViewedSection />
+        <StatsSection />
+        <WhyLSSection />
+      </div>
+    </HydrationBoundary>
   )
 }
