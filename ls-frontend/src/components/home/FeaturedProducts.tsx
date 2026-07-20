@@ -45,7 +45,7 @@ export default function FeaturedProducts() {
   })
 
   return (
-    <section className="section">
+    <section className="section pt-12">
       <div className="container-custom">
         {/* Header — centré */}
         <motion.div
