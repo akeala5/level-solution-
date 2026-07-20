@@ -2,6 +2,7 @@ import { Suspense } from 'react'
 import Link from 'next/link'
 import { ShieldCheck, ArrowRight } from 'lucide-react'
 import HeroSection from '@/components/home/HeroSection'
+import SponsoredBanner from '@/components/home/SponsoredBanner'
 import CategoriesSection from '@/components/home/CategoriesSection'
 import FeaturedProducts from '@/components/home/FeaturedProducts'
 import WhyLSSection from '@/components/home/WhyLSSection'
@@ -39,6 +40,7 @@ export default function HomePage() {
   return (
     <div>
       <HeroSection />
+      <SponsoredBanner />
       <CategoriesSection />
       <ReconBand />
       <Suspense fallback={<div className="h-96" />}>
