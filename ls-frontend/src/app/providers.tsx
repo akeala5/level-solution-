@@ -15,7 +15,7 @@ function StoreHydration() {
   return null
 }
 
-export default function Providers({ children }: { children: React.ReactNode }) {
+export default function Providers({ children, nonce }: { children: React.ReactNode; nonce?: string }) {
   const [queryClient] = useState(() => new QueryClient({
     defaultOptions: {
       queries: {
@@ -29,7 +29,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   }))
 
   return (
-    <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} disableTransitionOnChange>
+    <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} disableTransitionOnChange nonce={nonce}>
       <QueryClientProvider client={queryClient}>
         <StoreHydration />
         <ConfirmProvider>
