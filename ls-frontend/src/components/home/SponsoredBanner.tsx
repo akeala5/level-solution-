@@ -23,15 +23,18 @@ const HOUSE = [
   { icon: ShieldCheck, title: 'Reconditionné LS garanti', desc: '40 points de contrôle, garantie 6 mois. Achetez l’esprit tranquille.', cta: 'Découvrir', href: '/products?isReconditioned=true' },
 ]
 
+// Cadre pub #2 (bande). Partage le fetch limit=2 du hero (même queryKey → 1
+// requête) et affiche la 2e pub sponsorisée si elle existe, sinon repli maison.
+// Ainsi le hero (#1) et la bande (#2) ne montrent jamais le même produit.
 export default function SponsoredBanner() {
   const { data } = useQuery({
-    queryKey: ['sponsored-featured'],
-    queryFn: () => api.get('/sponsored-ads/featured', { params: { limit: 1 } }).then((r) => r.data.data as Ad[]),
+    queryKey: ['sponsored-featured', 2],
+    queryFn: () => api.get('/sponsored-ads/featured', { params: { limit: 2 } }).then((r) => r.data.data as Ad[]),
     staleTime: 5 * 60 * 1000,
   })
-  const ad = data && data.length > 0 ? data[0] : null
+  const ad = data && data.length > 1 ? data[1] : null
 
-  // Rotation du repli maison (si aucune pub active)
+  // Rotation du repli maison (si aucune 2e pub active)
   const [hi, setHi] = useState(0)
   useEffect(() => {
     if (ad) return
@@ -53,7 +56,7 @@ export default function SponsoredBanner() {
     const p = ad.product
     const shop = p.seller?.sellerProfile?.shopName
     return (
-      <section className="container-custom mt-6">
+      <section className="container-custom mt-10">
         <Link
           href={`/products/${p.slug}`}
           onClick={() => { api.post(`/sponsored-ads/${ad.id}/click`).catch(() => {}) }}
@@ -81,8 +84,11 @@ export default function SponsoredBanner() {
   const h = HOUSE[hi]
   const Icon = h.icon
   return (
-    <section className="container-custom mt-6">
+    <section className="container-custom mt-10">
       <Link href={h.href} className="relative flex items-center gap-4 bg-card border border-border rounded-2xl p-4 shadow-card hover:shadow-card-hover transition-shadow">
+        <span className="absolute top-2 right-3 text-[10px] font-bold uppercase tracking-wide text-muted flex items-center gap-1">
+          <Megaphone size={11} /> Espace pub
+        </span>
         <div className="w-14 h-14 rounded-xl bg-accent/12 text-accent grid place-items-center shrink-0"><Icon size={26} /></div>
         <div className="min-w-0 flex-1">
           <div className="font-bold text-dark text-[15px] leading-tight">{h.title}</div>
