@@ -42,7 +42,8 @@
     "trust_verified": "Verified sellers",
     "slideshow_label": "Featured products",
     "slide_aria": "{label} — slide {current} of {total}",
-    "see_listing": "View listing →"
+    "see_listing": "View listing →",
+    "slides": [{"part1":"Buy & Sell","highlight":"everything","part2":"safely","subtitle":"IT, fashion, vehicles, real estate — thousands of verified listings with secure Mobile Money payments."},{"part1":"IT gear at the","highlight":"best price","part2":"","subtitle":"PCs, smartphones, networking and LS-certified refurbished — 6-month warranty included."},{"part1":"Great deals","highlight":"near you","part2":"","subtitle":"Vehicles, fashion, real estate, appliances — verified sellers across francophone Africa."},{"part1":"Sell in","highlight":"minutes","part2":"","subtitle":"List for free and get paid via Mobile Money, secured by escrow."}]
   },
   "common": {
     "skip_to_content": "Skip to main content",
