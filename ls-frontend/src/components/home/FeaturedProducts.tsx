@@ -16,16 +16,16 @@ const tabs = [
 
 function SkeletonCard() {
   return (
-    <div className="bg-white rounded-2xl overflow-hidden border border-slate-100 animate-pulse">
-      <div className="aspect-[4/3] bg-slate-200" />
+    <div className="bg-card rounded-2xl overflow-hidden border border-border animate-pulse">
+      <div className="aspect-[4/3] bg-surface" />
       <div className="p-3.5 space-y-2.5">
-        <div className="h-2.5 bg-slate-200 rounded-full w-1/3" />
-        <div className="h-4 bg-slate-200 rounded-full w-4/5" />
-        <div className="h-4 bg-slate-200 rounded-full w-2/3" />
-        <div className="h-px bg-slate-100" />
+        <div className="h-2.5 bg-surface rounded-full w-1/3" />
+        <div className="h-4 bg-surface rounded-full w-4/5" />
+        <div className="h-4 bg-surface rounded-full w-2/3" />
+        <div className="h-px bg-border" />
         <div className="flex items-center justify-between">
-          <div className="h-3 bg-slate-200 rounded-full w-1/3" />
-          <div className="h-3 bg-slate-200 rounded-full w-1/5" />
+          <div className="h-3 bg-surface rounded-full w-1/3" />
+          <div className="h-3 bg-surface rounded-full w-1/5" />
         </div>
       </div>
     </div>
@@ -57,10 +57,10 @@ export default function FeaturedProducts() {
           <span className="inline-block text-xs uppercase tracking-widest text-accent font-semibold mb-2">
             Sélection du moment
           </span>
-          <h2 className="text-2xl md:text-3xl font-bold text-slate-900 mb-1.5">
+          <h2 className="text-2xl md:text-3xl font-bold text-dark mb-1.5">
             Annonces à la une
           </h2>
-          <p className="text-slate-500 text-sm">Les meilleures offres du moment</p>
+          <p className="text-muted text-sm">Les meilleures offres du moment</p>
         </motion.div>
 
         {/* Tabs — centrés */}
@@ -105,7 +105,7 @@ export default function FeaturedProducts() {
             </div>
           </>
         ) : (
-          <div className="text-center py-20 text-slate-400 text-sm">
+          <div className="text-center py-20 text-muted text-sm">
             Aucune annonce pour le moment
           </div>
         )}
