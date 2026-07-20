@@ -26,7 +26,7 @@ const pillars = [
 
 export default function WhyLSSection() {
   return (
-    <section className="section bg-card">
+    <section className="section bg-card pt-16 pb-20">
       <div className="container-custom">
         <div className="text-center mb-9">
           <span className="inline-flex items-center gap-2 bg-accent/10 border border-accent/20 text-accent text-xs font-semibold px-3.5 py-1.5 rounded-full mb-4">
