@@ -2,7 +2,6 @@
 import Link from 'next/link'
 import ProductImage from './ProductImage'
 import { Heart, Star, MapPin, Shield, Zap, Package, Eye, ShoppingCart, MessageSquare, Truck, RefreshCw, BadgeCheck, GitCompare, Flame, Clock, Layers } from 'lucide-react'
-import { motion } from 'framer-motion'
 import { Product } from '@/types'
 import { cn, formatPrice, getConditionLabel, timeAgo, imgBlurDataURL } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth.store'
@@ -19,7 +18,7 @@ function FlashBadge({ flashEndsAt }: { flashEndsAt: string }) {
   return (
     <span className={cn(
       'inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full border font-bold',
-      urgency === 'critical' ? 'bg-red-500 text-white border-red-500 animate-pulse' : 'bg-red-50 text-red-700 border-red-200'
+      urgency === 'critical' ? 'bg-red-500 text-white border-red-500' : 'bg-red-50 text-red-700 border-red-200'
     )}>
       <Flame size={8} /> FLASH <Clock size={7} /> {formatted}
     </span>
@@ -87,40 +86,35 @@ export default function ProductCard({ product, onFavoriteToggle }: Props) {
     : null
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25 }}
-      className="group"
-    >
+    <div className="group">
       <Link
         href={`/products/${product.slug}`}
-        className="block bg-white rounded-2xl shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden border border-slate-100 hover:border-indigo-100"
+        className="block bg-card rounded-2xl shadow-sm hover:shadow-md transition-shadow duration-200 overflow-hidden border border-border"
       >
         {/* ── Image 100% propre — aucun élément flottant ── */}
-        <div className="relative aspect-[4/3] bg-slate-50 overflow-hidden">
+        <div className="relative aspect-[4/3] bg-surface overflow-hidden">
           {image ? (
             <ProductImage
               src={image}
               alt={product.title}
               fill
-              className="object-cover transition-transform duration-300 group-hover:scale-105"
+              className="object-cover"
               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
               placeholder="blur"
               blurDataURL={imgBlurDataURL}
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center">
-              <Package size={36} className="text-slate-300" />
+              <Package size={36} className="text-muted" />
             </div>
           )}
 
-          {/* Hover actions — slide up depuis le bas de l'image */}
-          <div className="absolute inset-x-0 bottom-0 p-2 translate-y-full group-hover:translate-y-0 transition-transform duration-200 ease-out bg-gradient-to-t from-black/50 to-transparent pt-6">
+          {/* Hover actions — apparition en fondu (opacité), sans mouvement ni gradient */}
+          <div className="absolute inset-x-0 bottom-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-black/40">
             <div className="flex items-center gap-1.5">
               <button
                 onClick={handleAddToCart}
-                className="flex-1 flex items-center justify-center gap-1.5 bg-white text-slate-800 text-xs font-semibold py-1.5 rounded-xl hover:bg-indigo-600 hover:text-white transition-colors shadow-sm"
+                className="flex-1 flex items-center justify-center gap-1.5 bg-card text-dark text-xs font-semibold py-1.5 rounded-xl hover:bg-accent hover:text-white transition-colors shadow-sm"
               >
                 <ShoppingCart size={11} /> Ajouter
               </button>
@@ -150,7 +144,7 @@ export default function ProductCard({ product, onFavoriteToggle }: Props) {
               </span>
             )}
             {product.isReconditioned && (
-              <span className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full border font-medium bg-indigo-50 text-indigo-700 border-indigo-200">
+              <span className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full border font-medium bg-accent/10 text-accent border-accent/20">
                 <RefreshCw size={8} /> Reconditionné
               </span>
             )}
@@ -182,12 +176,12 @@ export default function ProductCard({ product, onFavoriteToggle }: Props) {
                 onClick={handleCompare}
                 title={inCompare ? 'Retirer de la comparaison' : 'Ajouter à la comparaison'}
                 className={cn(
-                  'w-6 h-6 rounded-full flex items-center justify-center transition-all border',
+                  'w-6 h-6 rounded-full flex items-center justify-center transition-colors border',
                   inCompare
                     ? 'bg-primary/10 text-primary border-primary/30'
                     : compareDisabled
-                    ? 'bg-slate-50 text-slate-300 border-slate-200 cursor-not-allowed'
-                    : 'bg-slate-50 text-slate-400 border-slate-200 hover:bg-primary/10 hover:text-primary hover:border-primary/30'
+                    ? 'bg-surface text-muted/60 border-border cursor-not-allowed'
+                    : 'bg-surface text-muted border-border hover:bg-primary/10 hover:text-primary hover:border-primary/30'
                 )}
               >
                 <GitCompare size={10} />
@@ -196,10 +190,10 @@ export default function ProductCard({ product, onFavoriteToggle }: Props) {
                 onClick={handleFavorite}
                 disabled={loadingFav}
                 className={cn(
-                  'w-6 h-6 rounded-full flex items-center justify-center transition-all border',
+                  'w-6 h-6 rounded-full flex items-center justify-center transition-colors border',
                   isFav
                     ? 'bg-rose-50 text-rose-500 border-rose-200'
-                    : 'bg-slate-50 text-slate-400 border-slate-200 hover:bg-rose-50 hover:text-rose-400 hover:border-rose-200'
+                    : 'bg-surface text-muted border-border hover:bg-rose-50 hover:text-rose-400 hover:border-rose-200'
                 )}
               >
                 <Heart size={11} fill={isFav ? 'currentColor' : 'none'} />
@@ -208,17 +202,17 @@ export default function ProductCard({ product, onFavoriteToggle }: Props) {
           </div>
 
           {/* Titre */}
-          <h3 className="text-sm font-semibold text-slate-800 leading-snug line-clamp-2 mb-2 group-hover:text-indigo-600 transition-colors">
+          <h3 className="text-sm font-semibold text-dark leading-snug line-clamp-2 mb-2 group-hover:text-accent transition-colors">
             {product.title}
           </h3>
 
           {/* Prix */}
           <div className="flex items-baseline gap-2 mb-2.5">
-            <span className="text-base font-bold text-indigo-600">
+            <span className="text-base font-bold text-primary">
               {formatPrice(product.price)}
             </span>
             {product.originalPrice && (
-              <span className="text-xs text-slate-400 line-through">
+              <span className="text-xs text-muted line-through">
                 {formatPrice(product.originalPrice)}
               </span>
             )}
@@ -230,15 +224,15 @@ export default function ProductCard({ product, onFavoriteToggle }: Props) {
           </div>
 
           {/* Divider */}
-          <div className="h-px bg-slate-100 mb-2" />
+          <div className="h-px bg-border mb-2" />
 
           {/* Vendeur */}
-          <div className="flex items-center justify-between text-[11px] text-slate-500">
+          <div className="flex items-center justify-between text-[11px] text-muted">
             <div className="flex items-center gap-1.5 min-w-0">
-              <div className="w-5 h-5 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-[9px] shrink-0">
+              <div className="w-5 h-5 rounded-full bg-accent/12 flex items-center justify-center text-accent font-bold text-[9px] shrink-0">
                 {product.seller?.firstName?.[0]?.toUpperCase()}
               </div>
-              <span className="truncate font-medium text-slate-600">
+              <span className="truncate font-medium text-dark">
                 {product.seller?.sellerProfile?.shopName || product.seller?.firstName}
               </span>
               {product.seller?.isKycVerified && (
@@ -256,7 +250,7 @@ export default function ProductCard({ product, onFavoriteToggle }: Props) {
           </div>
 
           {/* Ville + livraison */}
-          <div className="flex items-center justify-between mt-1.5 text-[10px] text-slate-400">
+          <div className="flex items-center justify-between mt-1.5 text-[10px] text-muted">
             {product.city && (
               <span className="flex items-center gap-1"><MapPin size={9} />{product.city}</span>
             )}
@@ -265,9 +259,9 @@ export default function ProductCard({ product, onFavoriteToggle }: Props) {
             )}
           </div>
 
-          <p className="text-[10px] text-slate-300 mt-1 text-right">{timeAgo(product.createdAt)}</p>
+          <p className="text-[10px] text-muted mt-1 text-right">{timeAgo(product.createdAt)}</p>
         </div>
       </Link>
-    </motion.div>
+    </div>
   )
 }

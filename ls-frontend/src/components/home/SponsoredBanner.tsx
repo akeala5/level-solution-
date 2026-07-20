@@ -13,7 +13,7 @@ const HOUSE = [
 // Cadre pub #2 (bande) : encart maison rotatif (cross-sell), découplé du hero
 // pour éviter tout doublon de produit. Le hero (#1) porte les pubs sponsorisées.
 export default function SponsoredBanner() {
-  const [hi, setHi] = useState(0)
+  const [hi, setHi] = useState(2)
   useEffect(() => {
     if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
     const t = setInterval(() => setHi((i) => (i + 1) % HOUSE.length), 6000)

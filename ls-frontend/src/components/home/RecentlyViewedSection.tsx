@@ -1,6 +1,6 @@
 'use client'
 import Link from 'next/link'
-import Image from 'next/image'
+import ProductImage from '@/components/product/ProductImage'
 import { Clock, X, Package } from 'lucide-react'
 import { useRecentlyViewed } from '@/hooks/useRecentlyViewed'
 import { formatPrice, imgBlurDataURL } from '@/lib/utils'
@@ -31,15 +31,15 @@ export default function RecentlyViewedSection() {
           <Link
             key={item.id}
             href={`/products/${item.slug}`}
-            className="shrink-0 w-36 bg-white rounded-xl border border-border hover:border-primary/40 hover:shadow-card transition-all group"
+            className="shrink-0 w-36 bg-card rounded-xl border border-border hover:shadow-card transition-shadow group"
           >
             <div className="relative aspect-[4/3] bg-surface rounded-t-xl overflow-hidden">
               {item.imageUrl ? (
-                <Image
+                <ProductImage
                   src={item.imageUrl}
                   alt={item.title}
                   fill
-                  className="object-cover group-hover:scale-105 transition-transform duration-200"
+                  className="object-cover"
                   sizes="144px"
                   placeholder="blur"
                   blurDataURL={imgBlurDataURL}
