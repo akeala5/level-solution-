@@ -25,7 +25,7 @@ export default function AdminSponsoredPage() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin-sponsored'],
-    queryFn: async () => (await api.get('/sponsored-ads/admin/all?limit=50')).data,
+    queryFn: async () => (await api.get('/sponsored-ads/admin/all?limit=50')).data.data,
     enabled: _hasHydrated && isAuthenticated,
   })
 
