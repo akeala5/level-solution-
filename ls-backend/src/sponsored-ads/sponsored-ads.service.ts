@@ -144,12 +144,14 @@ export class SponsoredAdsService {
     const ads = await this.prisma.sponsoredAd.findMany({
       where: {
         isActive: true,
+        status: 'APPROVED', // exclut PENDING (non modéré) et REJECTED (retiré par l'admin)
         startsAt: { lte: now },
         endsAt:   { gte: now },
         ...(categoryId ? { product: { categoryId } } : {}),
       },
       take: limit,
-      orderBy: { budget: 'desc' },
+      // Ordre éditorial : épinglées d'abord, puis priorité admin, puis budget.
+      orderBy: [{ isPinned: 'desc' }, { priority: 'desc' }, { budget: 'desc' }],
       include: {
         product: {
           include: {
@@ -170,6 +172,17 @@ export class SponsoredAdsService {
   }
 
   // ─── ADMIN ────────────────────────────────────────────────────────────────────
+
+  async adminUpdate(id: string, dto: { status?: string; priority?: number; isPinned?: boolean }) {
+    const ad = await this.prisma.sponsoredAd.findUnique({ where: { id } });
+    if (!ad) throw new NotFoundException('Campagne introuvable');
+    const data: any = {};
+    if (dto.status && ['PENDING', 'APPROVED', 'REJECTED'].includes(dto.status)) data.status = dto.status;
+    if (typeof dto.priority === 'number') data.priority = dto.priority;
+    if (typeof dto.isPinned === 'boolean') data.isPinned = dto.isPinned;
+    const updated = await this.prisma.sponsoredAd.update({ where: { id }, data });
+    return { message: 'Campagne mise à jour', data: updated };
+  }
 
   async adminFindAll(page = 1, limit = 20) {
     const skip = (page - 1) * limit;

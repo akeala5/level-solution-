@@ -79,6 +79,18 @@ export class SponsoredAdsController {
   @ApiBearerAuth()
   @UseGuards(RolesGuard)
   @Roles('ADMIN' as any)
+  @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN' as any)
+  @Patch('admin/:id')
+  @ApiOperation({ summary: '[Admin] Modérer une campagne (status/priority/isPinned)' })
+  adminUpdate(
+    @Param('id') id: string,
+    @Body() body: { status?: string; priority?: number; isPinned?: boolean },
+  ) {
+    return this.service.adminUpdate(id, body);
+  }
+
   @Get('admin/all')
   @ApiOperation({ summary: '[Admin] Toutes les campagnes' })
   adminFindAll(

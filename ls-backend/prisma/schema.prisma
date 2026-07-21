@@ -895,6 +895,9 @@ model SponsoredAd {
   startsAt  DateTime
   endsAt    DateTime
   isActive  Boolean  @default(true)
+  status    String   @default("APPROVED") // PENDING | APPROVED | REJECTED
+  priority  Int      @default(0)
+  isPinned  Boolean  @default(false)
   createdAt DateTime @default(now())
 
   product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
