@@ -1,27 +1,35 @@
 'use client'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
-import { Megaphone, ArrowRight, Crown, ShieldCheck, Store, Wallet } from 'lucide-react'
+import { Megaphone, ArrowRight } from 'lucide-react'
+import { useHeroConfig, heroIcon, type HousePromo } from '@/hooks/useHeroConfig'
 
-const HOUSE = [
-  { icon: Crown, title: 'Boostez vos ventes', desc: 'Devenez vendeur Premium : boutique pro, badge vérifié et annonces sponsorisées.', cta: 'Voir les forfaits', href: '/pricing' },
-  { icon: ShieldCheck, title: 'Reconditionné LS garanti', desc: '40 points de contrôle, garantie 6 mois. Achetez l’esprit tranquille.', cta: 'Découvrir', href: '/products?isReconditioned=true' },
-  { icon: Store, title: 'Vendez gratuitement', desc: 'Déposez votre annonce en 2 minutes et touchez des milliers d’acheteurs.', cta: 'Déposer une annonce', href: '/products/create' },
-  { icon: Wallet, title: 'Paiement Mobile Money sécurisé', desc: 'Séquestre : vous êtes payé, l’acheteur est protégé jusqu’à réception.', cta: 'Comment ça marche', href: '/how-it-works' },
+const FALLBACK_HOUSE: HousePromo[] = [
+  { icon: 'Crown', title: 'Boostez vos ventes', desc: 'Devenez vendeur Premium : boutique pro, badge vérifié et annonces sponsorisées.', cta: 'Voir les forfaits', href: '/pricing' },
+  { icon: 'ShieldCheck', title: 'Reconditionné LS garanti', desc: '40 points de contrôle, garantie 6 mois. Achetez l’esprit tranquille.', cta: 'Découvrir', href: '/products?isReconditioned=true' },
+  { icon: 'Store', title: 'Vendez gratuitement', desc: 'Déposez votre annonce en 2 minutes et touchez des milliers d’acheteurs.', cta: 'Déposer une annonce', href: '/products/create' },
+  { icon: 'Wallet', title: 'Paiement Mobile Money sécurisé', desc: 'Séquestre : vous êtes payé, l’acheteur est protégé jusqu’à réception.', cta: 'Comment ça marche', href: '/how-it-works' },
 ]
 
-// Cadre pub #2 (bande) : encart maison rotatif (cross-sell), découplé du hero
-// pour éviter tout doublon de produit. Le hero (#1) porte les pubs sponsorisées.
+// Cadre pub #2 (bande) : encart maison rotatif (cross-sell), découplé du hero.
+// Encarts issus de la config admin (hero_config.housePromos) ou repli local.
 export default function SponsoredBanner() {
-  const [hi, setHi] = useState(2)
-  useEffect(() => {
-    if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
-    const t = setInterval(() => setHi((i) => (i + 1) % HOUSE.length), 6000)
-    return () => clearInterval(t)
-  }, [])
+  const { data: cfg } = useHeroConfig()
+  const house = (cfg?.housePromos && cfg.housePromos.length > 0) ? cfg.housePromos : FALLBACK_HOUSE
 
-  const h = HOUSE[hi]
-  const Icon = h.icon
+  // Démarre sur un encart différent du hero (qui affiche les 1ers) pour éviter la redite.
+  const [hi, setHi] = useState(0)
+  useEffect(() => {
+    setHi(house.length > 2 ? 2 : 0)
+    if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    const t = setInterval(() => setHi((i) => (i + 1) % house.length), 6000)
+    return () => clearInterval(t)
+  }, [house.length])
+
+  const h = house[Math.min(hi, house.length - 1)]
+  if (!h) return null
+  const Icon = heroIcon(h.icon)
+
   return (
     <section className="container-custom mt-10">
       <Link key={hi} href={h.href} className="relative flex items-center gap-4 bg-card border border-border rounded-2xl p-4 shadow-card hover:shadow-card-hover transition-shadow animate-fade-in">

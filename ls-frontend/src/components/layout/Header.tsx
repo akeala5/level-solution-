@@ -396,7 +396,7 @@ export default function Header() {
                                     { icon: Banknote, label: 'Retraits', href: '/admin/payouts' },
                                     { icon: Flag, label: 'Signalements', href: '/admin/reports' },
                                     { icon: Scale, label: 'Litiges', href: '/admin/disputes' },
-                                    ...(user?.role === 'ADMIN' ? [{ icon: CreditCard, label: 'Forfaits', href: '/admin/plans' }] : []),
+                                    ...(user?.role === 'ADMIN' ? [{ icon: CreditCard, label: 'Forfaits', href: '/admin/plans' }, { icon: Sparkles, label: 'Hero', href: '/admin/hero' }] : []),
                                   ]
                                 : []),
                             ].map(({ icon: Icon, label, href }) => (
@@ -501,7 +501,7 @@ export default function Header() {
                           { label: 'Retraits', href: '/admin/payouts' },
                           { label: 'Signalements', href: '/admin/reports' },
                           { label: 'Litiges', href: '/admin/disputes' },
-                          ...(user?.role === 'ADMIN' ? [{ label: 'Forfaits', href: '/admin/plans' }] : []),
+                          ...(user?.role === 'ADMIN' ? [{ label: 'Forfaits', href: '/admin/plans' }, { label: 'Hero', href: '/admin/hero' }] : []),
                         ]
                       : []),
                   ].map(({ label, href }) => (
