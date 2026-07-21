@@ -4,12 +4,20 @@ import {
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { SubscriptionsService } from './subscriptions.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { Public } from '../common/decorators/public.decorator';
 
 @ApiTags('Subscriptions')
 @Controller('subscriptions')
 @ApiBearerAuth()
 export class SubscriptionsController {
   constructor(private readonly subscriptionsService: SubscriptionsService) {}
+
+  @Public()
+  @Get('plans')
+  @ApiOperation({ summary: 'Liste publique des forfaits actifs (page tarifs)' })
+  getPlans() {
+    return this.subscriptionsService.getPublicPlans();
+  }
 
   @Get('me')
   @ApiOperation({ summary: 'Mon abonnement actuel + limites annonces' })

@@ -7,19 +7,8 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import { NotificationsService } from '../notifications/notifications.service';
+import { PlanConfigService } from '../common/services/plan-config.service';
 import Stripe from 'stripe';
-
-const PLAN_LIMITS: Record<string, number> = {
-  FREE: 10, BASIC: 30, ESSENTIAL: 60, PREMIUM: 100, PRO: 200, BUSINESS: 999999,
-};
-
-const PLAN_PRICES: Record<string, Record<string, number>> = {
-  BASIC:     { monthly: 500000,  yearly: 5000000  },
-  ESSENTIAL: { monthly: 1000000, yearly: 10000000 },
-  PREMIUM:   { monthly: 2000000, yearly: 20000000 },
-  PRO:       { monthly: 3500000, yearly: 35000000 },
-  BUSINESS:  { monthly: 7500000, yearly: 75000000 },
-};
 
 @Injectable()
 export class SubscriptionsService {
@@ -30,24 +19,25 @@ export class SubscriptionsService {
     private prisma: PrismaService,
     private configService: ConfigService,
     private notifications: NotificationsService,
+    private planConfig: PlanConfigService,
   ) {
     this.stripe = new Stripe(configService.get('stripe.secretKey'), {
       apiVersion: '2023-10-16',
     });
   }
 
+  // ─── LISTE PUBLIQUE DES FORFAITS (consommée par la page /pricing) ────────────
+
+  async getPublicPlans() {
+    const plans = await this.planConfig.getActivePlans();
+    return { message: 'Forfaits', data: plans };
+  }
+
   // ─── RÉCUPÉRER L'ABONNEMENT ──────────────────────────────────────────────────
 
   async getUserSubscription(userId: string) {
-    const [subscription, planConfig] = await Promise.all([
-      this.prisma.subscription.findUnique({ where: { userId } }),
-      this.prisma.subscription.findUnique({ where: { userId } }).then(async (sub) => {
-        return this.prisma.subscriptionPlanConfig.findUnique({
-          where: { plan: sub?.plan || 'FREE' },
-        });
-      }),
-    ]);
-
+    const subscription = await this.prisma.subscription.findUnique({ where: { userId } });
+    const planConfig = await this.planConfig.getConfig(subscription?.plan || 'FREE');
     const limits = await this.checkListingLimits(userId);
 
     return {
@@ -65,13 +55,13 @@ export class SubscriptionsService {
       where: { userId },
     });
     const plan = subscription?.plan || 'FREE';
-    const max = PLAN_LIMITS[plan] ?? 10;
+    const cfg = await this.planConfig.getConfig(plan);
 
     const used = await this.prisma.product.count({
       where: { sellerId: userId, status: { notIn: ['ARCHIVED', 'SOLD'] } },
     });
 
-    return { canPost: used < max, used, max, plan };
+    return { canPost: used < cfg.maxProducts, used, max: cfg.maxProducts, plan };
   }
 
   // ─── MISE À NIVEAU VERS UN FORFAIT PAYANT ───────────────────────────────────
@@ -79,15 +69,21 @@ export class SubscriptionsService {
   async upgradeSubscription(
     userId: string, plan: string, billingPeriod: 'monthly' | 'yearly',
   ) {
-    if (!PLAN_PRICES[plan]) throw new BadRequestException('Forfait invalide');
     if (plan === 'FREE') throw new BadRequestException('Le forfait gratuit ne nécessite pas de paiement');
+
+    const cfg = await this.planConfig.getConfig(plan);
+    // getConfig retombe sur FREE si le plan est inconnu → on rejette explicitement.
+    if (!cfg || cfg.plan !== plan || !cfg.isActive) {
+      throw new BadRequestException('Forfait invalide ou indisponible');
+    }
 
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { email: true, firstName: true },
     });
 
-    const amount = PLAN_PRICES[plan][billingPeriod];
+    const amount = billingPeriod === 'yearly' ? cfg.yearlyPrice : cfg.monthlyPrice;
+    if (!amount || amount <= 0) throw new BadRequestException('Tarif indisponible pour ce forfait');
 
     const session = await this.stripe.checkout.sessions.create({
       mode: 'payment',
@@ -97,10 +93,13 @@ export class SubscriptionsService {
         price_data: {
           currency: 'xof',
           product_data: {
-            name: `Forfait LS ${plan} (${billingPeriod === 'monthly' ? 'mensuel' : 'annuel'})`,
-            description: `${PLAN_LIMITS[plan]} annonces · Commission ${this.getPlanCommission(plan)}%`,
+            name: `Forfait LS ${cfg.name} (${billingPeriod === 'monthly' ? 'mensuel' : 'annuel'})`,
+            description: `${cfg.maxProducts} annonces · Commission ${(cfg.commission * 100).toFixed(1)}%`,
           },
-          unit_amount: amount,
+          // XOF = devise SANS décimale chez Stripe : unit_amount = montant entier
+          // exact (2000 = 2000 FCFA). L'ancien code envoyait 500000 pour BASIC
+          // (×250) — bug de surfacturation corrigé ici en lisant la table.
+          unit_amount: Math.round(amount),
         },
         quantity: 1,
       }],
@@ -218,14 +217,5 @@ export class SubscriptionsService {
     }
 
     return expiring.length;
-  }
-
-  // ─── HELPER ──────────────────────────────────────────────────────────────────
-
-  private getPlanCommission(plan: string): number {
-    const rates: Record<string, number> = {
-      FREE: 5, BASIC: 4.5, ESSENTIAL: 4, PREMIUM: 3.5, PRO: 3, BUSINESS: 2,
-    };
-    return rates[plan] ?? 5;
   }
 }

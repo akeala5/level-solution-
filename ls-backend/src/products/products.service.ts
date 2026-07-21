@@ -9,10 +9,8 @@ import { SearchService } from '../search/search.service';
 import { generateSlug } from '../common/utils/slug.util';
 import { getPaginationParams, paginate } from '../common/utils/pagination.util';
 import { CreateProductDto, UpdateProductDto, ProductQueryDto } from './dto/create-product.dto';
+import { PlanConfigService } from '../common/services/plan-config.service';
 
-const PLAN_LIMITS: Record<string, number> = {
-  FREE: 10, BASIC: 30, ESSENTIAL: 60, PREMIUM: 100, PRO: 200, BUSINESS: 999999,
-};
 
 const PRODUCT_INCLUDE = {
   images: { orderBy: { order: 'asc' as any } },
@@ -33,6 +31,7 @@ export class ProductsService {
   constructor(
     private prisma: PrismaService,
     private search: SearchService,
+    private planConfig: PlanConfigService,
   ) {}
 
   // ─── LISTE PUBLIQUE ──────────────────────────────────────────────────────────
@@ -290,7 +289,8 @@ export class ProductsService {
     const activeCount = await this.prisma.product.count({
       where: { sellerId, status: { in: ['ACTIVE', 'PENDING_REVIEW', 'DRAFT'] } },
     });
-    const maxAllowed = PLAN_LIMITS[plan] || 10;
+    const planCfg = await this.planConfig.getConfig(plan);
+    const maxAllowed = planCfg.maxProducts;
     if (activeCount >= maxAllowed) {
       throw new ForbiddenException(
         `Votre forfait ${plan} est limité à ${maxAllowed} annonces actives. Upgradez pour publier plus.`,

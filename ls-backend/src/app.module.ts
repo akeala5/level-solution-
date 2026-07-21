@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD, APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { PlanConfigModule } from './common/plan-config.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { CacheModule } from '@nestjs/cache-manager';
 import { redisStore } from 'cache-manager-redis-yet';
@@ -76,6 +77,7 @@ import { StockReservationJob } from './common/jobs/stock-reservation.job';
     ScheduleModule.forRoot(),
 
     PrismaModule,
+    PlanConfigModule,
     AuthModule,
     UsersModule,
     CategoriesModule,
