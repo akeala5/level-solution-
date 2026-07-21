@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PlanConfigService } from '../common/services/plan-config.service';
+import { UpdatePlanConfigDto } from './dto/update-plan-config.dto';
 import Stripe from 'stripe';
 
 @Injectable()
@@ -217,5 +218,26 @@ export class SubscriptionsService {
     }
 
     return expiring.length;
+  }
+
+  // ─── ADMIN : configuration des forfaits (source unique) ──────────────────────
+
+  async adminListPlans() {
+    const plans = await this.prisma.subscriptionPlanConfig.findMany({
+      orderBy: { monthlyPrice: 'asc' },
+    });
+    return { message: 'Forfaits (admin)', data: plans };
+  }
+
+  async adminUpdatePlan(plan: string, dto: UpdatePlanConfigDto) {
+    const existing = await this.prisma.subscriptionPlanConfig.findUnique({ where: { plan: plan as any } });
+    if (!existing) throw new NotFoundException('Forfait introuvable');
+    const updated = await this.prisma.subscriptionPlanConfig.update({
+      where: { plan: plan as any },
+      data: dto as any,
+    });
+    this.planConfig.invalidate(); // le prochain read (pricing/facturation) relit la table
+    this.logger.log(`[ADMIN] Forfait ${plan} mis à jour`);
+    return { message: 'Forfait mis à jour', data: updated };
   }
 }

@@ -28,50 +28,49 @@ const FALLBACK_FREE: PlanConfig = {
 
 /**
  * SOURCE DE VÉRITÉ UNIQUE des forfaits (table subscription_plan_configs).
- * Remplace les maps PLAN_LIMITS / PLAN_PRICES / getPlanCommission jadis
- * codées en dur et dupliquées (front↔back divergeaient → bug de facturation).
- * Cache mémoire TTL 60 s (config lue sur le chemin chaud création d'annonce) ;
- * invalidate() est appelé par l'admin après une écriture (Lot 1).
+ * Remplace les maps PLAN_LIMITS / PLAN_PRICES / getPlanCommission jadis codées
+ * en dur et dupliquées (front↔back divergeaient → bug de facturation ×250).
+ *
+ * PAS DE CACHE MÉMOIRE : volontaire. En cluster PM2 (2 workers), un cache
+ * par-worker rendrait une édition admin incohérente entre workers jusqu'au TTL.
+ * La table fait 6 lignes et n'est lue que sur des chemins peu fréquents
+ * (création d'annonce, checkout, page tarifs, vue abonnement) → une lecture DB
+ * directe est négligeable ET garantit que toute édition admin est visible
+ * instantanément sur TOUS les workers. invalidate() est conservé (no-op) pour
+ * la compatibilité des appelants.
  */
 @Injectable()
 export class PlanConfigService {
-  private cache: Map<string, PlanConfig> | null = null;
-  private cachedAt = 0;
-  private readonly TTL_MS = 60_000;
-
   constructor(private prisma: PrismaService) {}
 
-  private async load(): Promise<Map<string, PlanConfig>> {
-    if (this.cache && Date.now() - this.cachedAt < this.TTL_MS) return this.cache;
+  private async loadAll(): Promise<Map<string, PlanConfig>> {
     try {
       const rows = await this.prisma.subscriptionPlanConfig.findMany();
       if (rows.length > 0) {
         const map = new Map<string, PlanConfig>();
         for (const r of rows) map.set(r.plan, r as unknown as PlanConfig);
-        this.cache = map;
-        this.cachedAt = Date.now();
         return map;
       }
     } catch {
-      // DB indisponible : on retombe sur le cache existant ou le fallback.
+      // DB indisponible : fallback minimal.
     }
-    return this.cache ?? new Map([['FREE', FALLBACK_FREE]]);
+    return new Map([['FREE', FALLBACK_FREE]]);
   }
 
   async getConfig(plan: string): Promise<PlanConfig> {
-    const map = await this.load();
+    const map = await this.loadAll();
     return map.get(plan) ?? map.get('FREE') ?? FALLBACK_FREE;
   }
 
   async getActivePlans(): Promise<PlanConfig[]> {
-    const map = await this.load();
+    const map = await this.loadAll();
     return [...map.values()]
       .filter((p) => p.isActive)
       .sort((a, b) => a.monthlyPrice - b.monthlyPrice);
   }
 
+  // Conservé pour compat (plus de cache à vider) — la table est lue à chaque appel.
   invalidate(): void {
-    this.cache = null;
-    this.cachedAt = 0;
+    /* no-op : lecture DB directe, aucune incohérence cluster possible */
   }
 }

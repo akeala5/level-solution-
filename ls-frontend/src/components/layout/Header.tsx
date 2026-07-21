@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Search, ShoppingCart, Bell, Menu, X, User, LogOut,
   ChevronDown, ChevronRight, Laptop, Cpu, Wifi, Package, Tag,
-  Heart, MessageSquare, LayoutDashboard, Settings,
+  Heart, MessageSquare, LayoutDashboard, Settings, CreditCard,
   Shield, Zap, Monitor, HardDrive, Printer, Server,
   Smartphone, Headphones, Camera, Keyboard, Cable,
   Shirt, ShoppingBag, Sparkles, Bike, Car, Truck,
@@ -396,6 +396,7 @@ export default function Header() {
                                     { icon: Banknote, label: 'Retraits', href: '/admin/payouts' },
                                     { icon: Flag, label: 'Signalements', href: '/admin/reports' },
                                     { icon: Scale, label: 'Litiges', href: '/admin/disputes' },
+                                    ...(user?.role === 'ADMIN' ? [{ icon: CreditCard, label: 'Forfaits', href: '/admin/plans' }] : []),
                                   ]
                                 : []),
                             ].map(({ icon: Icon, label, href }) => (
@@ -500,6 +501,7 @@ export default function Header() {
                           { label: 'Retraits', href: '/admin/payouts' },
                           { label: 'Signalements', href: '/admin/reports' },
                           { label: 'Litiges', href: '/admin/disputes' },
+                          ...(user?.role === 'ADMIN' ? [{ label: 'Forfaits', href: '/admin/plans' }] : []),
                         ]
                       : []),
                   ].map(({ label, href }) => (
