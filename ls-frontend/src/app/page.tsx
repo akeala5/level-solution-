@@ -48,6 +48,10 @@ export default async function HomePage() {
   const queryClient = getServerQueryClient()
   await Promise.allSettled([
     queryClient.prefetchQuery({
+      queryKey: ['hero-config'],
+      queryFn: () => serverGet('/hero-config'),
+    }),
+    queryClient.prefetchQuery({
       queryKey: ['home-categories'],
       queryFn: () => serverGet('/categories'),
     }),

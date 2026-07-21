@@ -7,6 +7,7 @@ import { WalletService } from './wallet.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
+import { EmailVerifiedGuard } from '../common/guards/email-verified.guard';
 
 @ApiTags('Wallet')
 @ApiBearerAuth()
@@ -40,6 +41,7 @@ export class WalletController {
     return this.walletService.getMyPayouts(userId, page, limit);
   }
 
+  @UseGuards(EmailVerifiedGuard)
   @Post('payout')
   @ApiOperation({ summary: 'Demander un retrait (débit immédiat du solde, validation admin)' })
   requestPayout(

@@ -1,50 +1,31 @@
 'use client'
 import Link from 'next/link'
-import { Check, X, Zap, Sparkles } from 'lucide-react'
+import { Check, Zap, Sparkles } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import api from '@/lib/api'
 
-const plans = [
-  {
-    id: 'gratuit',
-    name: 'Gratuit',
-    price: { monthly: 0, yearly: 0 },
-    maxProducts: 10,
-    included: ['10 annonces actives', 'Chat interne', 'Avis acheteurs', 'Page profil basique'],
-    missing: ['Statistiques', 'Boutique Pro', 'Annonces sponsorisées', 'Commission réduite'],
-    popular: false,
-  },
-  {
-    id: 'basic',
-    name: 'Basic',
-    price: { monthly: 2000, yearly: 20000 },
-    maxProducts: 30,
-    included: ['30 annonces actives', 'Statistiques', '1 annonce sponsorisée/mois', 'Commission réduite'],
-    missing: ['Boutique Pro', 'Annonces illimitées'],
-    popular: false,
-  },
-  {
-    id: 'premium',
-    name: 'Premium',
-    price: { monthly: 10000, yearly: 100000 },
-    maxProducts: 100,
-    included: ['100 annonces actives', 'Boutique Pro', 'Badge Premium ✓', '10 annonces sponsorisées/mois', 'Stats avancées'],
-    missing: [],
-    popular: true,
-  },
-  {
-    id: 'pro',
-    name: 'Pro',
-    price: { monthly: 17500, yearly: 175000 },
-    maxProducts: 200,
-    included: ['200 annonces actives', 'Badge Pro ✓', 'Annonces illimitées', 'Commission minimale', 'Support prioritaire'],
-    missing: [],
-    popular: false,
-  },
-]
+// Forfaits chargés depuis l'API (source unique : table subscription_plan_configs,
+// éditable par l'admin). Fini les prix codés en dur qui divergeaient du back.
+interface PlanConfig {
+  plan: string
+  name: string
+  maxProducts: number
+  monthlyPrice: number
+  yearlyPrice: number
+  features: string[]
+  isActive: boolean
+}
 
 export default function PricingSection() {
   const [yearly, setYearly] = useState(false)
+
+  const { data: plans, isLoading } = useQuery({
+    queryKey: ['public-plans'],
+    queryFn: () => api.get('/subscriptions/plans').then((r) => r.data.data as PlanConfig[]),
+    staleTime: 10 * 60 * 1000,
+  })
 
   return (
     <section id="pricing" className="section bg-surface">
@@ -69,58 +50,67 @@ export default function PricingSection() {
           </div>
         </div>
 
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 items-start">
-          {plans.map(({ id, name, price, maxProducts, included, missing, popular }) => (
-            <div
-              key={id}
-              id={id === 'pro' ? 'pro' : undefined}
-              className={cn(
-                'relative bg-card rounded-2xl border p-5 flex flex-col scroll-mt-24',
-                popular ? 'border-accent shadow-card-hover' : 'border-border'
-              )}
-            >
-              {popular && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                  <span className="inline-flex items-center gap-1 bg-accent text-white text-[10px] font-bold px-3 py-1 rounded-full">
-                    <Zap size={10} /> Populaire
-                  </span>
+        {isLoading ? (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="bg-card rounded-2xl border border-border p-5 animate-pulse h-72" />
+            ))}
+          </div>
+        ) : (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
+            {(plans ?? []).map((p) => {
+              const popular = p.plan === 'PREMIUM'
+              const price = yearly ? p.yearlyPrice : p.monthlyPrice
+              return (
+                <div
+                  key={p.plan}
+                  id={p.plan === 'PRO' ? 'pro' : undefined}
+                  className={cn(
+                    'relative bg-card rounded-2xl border p-5 flex flex-col scroll-mt-24',
+                    popular ? 'border-accent shadow-card-hover' : 'border-border'
+                  )}
+                >
+                  {popular && (
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                      <span className="inline-flex items-center gap-1 bg-accent text-white text-[10px] font-bold px-3 py-1 rounded-full">
+                        <Zap size={10} /> Populaire
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="mb-4">
+                    <p className={cn('text-xs uppercase tracking-widest font-semibold mb-2', popular ? 'text-accent' : 'text-muted')}>{p.name}</p>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-2xl font-bold text-dark">
+                        {price === 0 ? 'Gratuit' : price.toLocaleString('fr-FR')}
+                      </span>
+                      {p.monthlyPrice > 0 && <span className="text-xs text-muted">FCFA/{yearly ? 'an' : 'mois'}</span>}
+                    </div>
+                    <p className="text-xs text-muted mt-1">
+                      {p.maxProducts >= 999999 ? 'Annonces illimitées' : `Jusqu'à ${p.maxProducts} annonces`}
+                    </p>
+                  </div>
+
+                  <ul className="space-y-2 flex-1 mb-5">
+                    {(p.features ?? []).map((f) => (
+                      <li key={f} className="flex items-start gap-2 text-xs text-dark">
+                        <Check size={13} className="shrink-0 mt-0.5 text-accent" /> {f}
+                      </li>
+                    ))}
+                  </ul>
+
+                  <Link
+                    href={p.monthlyPrice === 0 ? '/auth/register' : '/dashboard'}
+                    className={cn('w-full text-center text-sm font-semibold py-2.5 rounded-xl transition-colors',
+                      popular ? 'bg-accent text-white hover:bg-accent-600' : 'border border-border text-dark hover:border-primary hover:text-primary')}
+                  >
+                    {p.monthlyPrice === 0 ? 'Commencer gratuitement' : 'Choisir ce plan'}
+                  </Link>
                 </div>
-              )}
-
-              <div className="mb-4">
-                <p className={cn('text-xs uppercase tracking-widest font-semibold mb-2', popular ? 'text-accent' : 'text-muted')}>{name}</p>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-2xl font-bold text-dark">
-                    {price[yearly ? 'yearly' : 'monthly'] === 0 ? 'Gratuit' : price[yearly ? 'yearly' : 'monthly'].toLocaleString('fr-FR')}
-                  </span>
-                  {price.monthly > 0 && <span className="text-xs text-muted">FCFA/{yearly ? 'an' : 'mois'}</span>}
-                </div>
-                <p className="text-xs text-muted mt-1">Jusqu&apos;à {maxProducts} annonces</p>
-              </div>
-
-              <ul className="space-y-2 flex-1 mb-5">
-                {included.map((f) => (
-                  <li key={f} className="flex items-start gap-2 text-xs text-dark">
-                    <Check size={13} className="shrink-0 mt-0.5 text-accent" /> {f}
-                  </li>
-                ))}
-                {missing.map((f) => (
-                  <li key={f} className="flex items-start gap-2 text-xs text-muted">
-                    <X size={13} className="text-border shrink-0 mt-0.5" /> <span className="line-through">{f}</span>
-                  </li>
-                ))}
-              </ul>
-
-              <Link
-                href={price.monthly === 0 ? '/auth/register' : '/dashboard'}
-                className={cn('w-full text-center text-sm font-semibold py-2.5 rounded-xl transition-colors',
-                  popular ? 'bg-accent text-white hover:bg-accent-600' : 'border border-border text-dark hover:border-primary hover:text-primary')}
-              >
-                {price.monthly === 0 ? 'Commencer gratuitement' : 'Choisir ce plan'}
-              </Link>
-            </div>
-          ))}
-        </div>
+              )
+            })}
+          </div>
+        )}
 
         <p className="text-center text-muted text-xs mt-6">
           Passez d&apos;un forfait à l&apos;autre à tout moment · Sans engagement · Annulation en 1 clic

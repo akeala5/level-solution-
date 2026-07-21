@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { WalletService } from '../wallet/wallet.service';
+import { PlanConfigService } from '../common/services/plan-config.service';
 import { getPaginationParams, paginate } from '../common/utils/pagination.util';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -22,6 +23,7 @@ export class OrdersService {
     private notifications: NotificationsService,
     private webhooks: WebhooksService,
     private wallet: WalletService,
+    private planConfig: PlanConfigService,
   ) {}
 
   private generateOrderNumber(): string {
@@ -60,12 +62,8 @@ export class OrdersService {
     const totalAmount = subtotal + delivery;
 
     // Commission dégressive selon le forfait vendeur
-    const commissionRates: Record<string, number> = {
-      FREE: 0.05, BASIC: 0.045, ESSENTIAL: 0.04,
-      PREMIUM: 0.035, PRO: 0.03, BUSINESS: 0.02,
-    };
     const sellerPlan = product.seller.subscription?.plan || 'FREE';
-    const commissionRate = commissionRates[sellerPlan] ?? 0.05;
+    const commissionRate = (await this.planConfig.getConfig(sellerPlan)).commission;
     // Commission sur le sous-total uniquement (les frais de port ne sont pas commissionnés)
     const commissionAmount = subtotal * commissionRate;
     const sellerAmount = totalAmount - commissionAmount;
@@ -180,10 +178,6 @@ export class OrdersService {
       bySeller.set(p.sellerId, list);
     }
 
-    const commissionRates: Record<string, number> = {
-      FREE: 0.05, BASIC: 0.045, ESSENTIAL: 0.04,
-      PREMIUM: 0.035, PRO: 0.03, BUSINESS: 0.02,
-    };
 
     const orders = await this.prisma.$transaction(async (tx) => {
       const created: any[] = [];
@@ -194,7 +188,7 @@ export class OrdersService {
         const delivery = prods.reduce((s, p) => s + (p.hasDelivery ? p.deliveryPrice || 0 : 0), 0);
         const totalAmount = subtotal + delivery;
         const plan = prods[0].seller.subscription?.plan || 'FREE';
-        const commissionRate = commissionRates[plan] ?? 0.05;
+        const commissionRate = (await this.planConfig.getConfig(plan)).commission;
         const commissionAmount = subtotal * commissionRate;
         const sellerAmount = totalAmount - commissionAmount;
 

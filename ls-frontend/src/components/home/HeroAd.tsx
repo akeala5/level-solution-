@@ -2,10 +2,11 @@
 import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
-import { Megaphone, ArrowRight, Crown, ShieldCheck, Store, Wallet } from 'lucide-react'
+import { Megaphone, ArrowRight } from 'lucide-react'
 import api from '@/lib/api'
 import { formatPrice } from '@/lib/utils'
 import ProductImage from '@/components/product/ProductImage'
+import { useHeroConfig, heroIcon, type HousePromo } from '@/hooks/useHeroConfig'
 
 interface Ad {
   id: string
@@ -18,17 +19,16 @@ interface Ad {
   }
 }
 
-type House = { icon: typeof Crown; title: string; desc: string; cta: string; href: string }
-const HOUSE: House[] = [
-  { icon: Crown, title: 'Devenez vendeur Premium', desc: 'Boutique pro, badge vérifié et annonces sponsorisées pour booster vos ventes.', cta: 'Voir les forfaits', href: '/pricing' },
-  { icon: ShieldCheck, title: 'Reconditionné LS garanti', desc: '40 points de contrôle, garantie 6 mois incluse. Achetez l’esprit tranquille.', cta: 'Découvrir', href: '/products?isReconditioned=true' },
-  { icon: Store, title: 'Vendez gratuitement', desc: 'Déposez votre annonce en 2 minutes et touchez des milliers d’acheteurs.', cta: 'Déposer une annonce', href: '/products/create' },
-  { icon: Wallet, title: 'Paiement Mobile Money', desc: 'Transactions sécurisées par séquestre : vous êtes payé, l’acheteur est protégé.', cta: 'Comment ça marche', href: '/how-it-works' },
+// Repli si la config n'est pas encore chargée (l'API renvoie normalement ces mêmes défauts).
+const FALLBACK_HOUSE: HousePromo[] = [
+  { icon: 'Crown', title: 'Devenez vendeur Premium', desc: 'Boutique pro, badge vérifié et annonces sponsorisées pour booster vos ventes.', cta: 'Voir les forfaits', href: '/pricing' },
+  { icon: 'ShieldCheck', title: 'Reconditionné LS garanti', desc: '40 points de contrôle, garantie 6 mois incluse. Achetez l’esprit tranquille.', cta: 'Découvrir', href: '/products?isReconditioned=true' },
+  { icon: 'Store', title: 'Vendez gratuitement', desc: 'Déposez votre annonce en 2 minutes et touchez des milliers d’acheteurs.', cta: 'Déposer une annonce', href: '/products/create' },
+  { icon: 'Wallet', title: 'Paiement Mobile Money', desc: 'Transactions sécurisées par séquestre : vous êtes payé, l’acheteur est protégé.', cta: 'Comment ça marche', href: '/how-it-works' },
 ]
 
-type Card = { kind: 'ad'; ad: Ad } | { kind: 'house'; h: House }
+type Card = { kind: 'ad'; ad: Ad } | { kind: 'house'; h: HousePromo }
 const PER_PAGE = 2
-const ROTATE_MS = 6500
 
 // Carte pub horizontale (image/icône à gauche, corps à droite) — pleine largeur, hauteur fixe.
 function AdCard({ card }: { card: Card }) {
@@ -58,7 +58,7 @@ function AdCard({ card }: { card: Card }) {
   }
 
   const h = card.h
-  const Icon = h.icon
+  const Icon = heroIcon(h.icon)
   return (
     <Link href={h.href} className="group relative flex items-center gap-3.5 min-h-[96px] rounded-2xl bg-card text-dark shadow-card-hover p-4">
       <span className="absolute top-2 right-2.5 flex items-center gap-1 text-[9px] font-bold uppercase tracking-wide text-muted">
@@ -76,8 +76,12 @@ function AdCard({ card }: { card: Card }) {
 
 // Cadre pub #1 : 2 slots empilés (1 colonne, pleine largeur) DANS le hero, qui
 // DÉFILENT par paires. Fait tourner toutes les pubs sponsorisées actives (2 à la
-// fois), complétées par des encarts maison pour toujours remplir les 2 slots.
+// fois), complétées par les encarts maison (configurables par l'admin).
 export default function HeroAd() {
+  const { data: cfg } = useHeroConfig()
+  const house = (cfg?.housePromos && cfg.housePromos.length > 0) ? cfg.housePromos : FALLBACK_HOUSE
+  const rotateMs = cfg?.rotateMs ?? 6500
+
   const { data } = useQuery({
     queryKey: ['sponsored-featured', 8],
     queryFn: () => api.get('/sponsored-ads/featured', { params: { limit: 8 } }).then((r) => r.data.data as Ad[]),
@@ -88,7 +92,7 @@ export default function HeroAd() {
   // Pool = pubs réelles puis encarts maison (remplissage) ; toujours ≥ 2 cartes.
   const cards: Card[] = [
     ...ads.map((ad) => ({ kind: 'ad', ad } as Card)),
-    ...HOUSE.map((h) => ({ kind: 'house', h } as Card)),
+    ...house.map((h) => ({ kind: 'house', h } as Card)),
   ]
   const pages: Card[][] = Array.from({ length: Math.ceil(cards.length / PER_PAGE) }, (_, i) => cards.slice(i * PER_PAGE, (i + 1) * PER_PAGE))
 
@@ -100,9 +104,9 @@ export default function HeroAd() {
   useEffect(() => {
     if (pages.length <= 1 || paused) return
     if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
-    const timer = setInterval(() => setPage((p) => (p + 1) % pages.length), ROTATE_MS)
+    const timer = setInterval(() => setPage((p) => (p + 1) % pages.length), rotateMs)
     return () => clearInterval(timer)
-  }, [pages.length, paused])
+  }, [pages.length, paused, rotateMs])
 
   // Impressions facturables : une seule fois par pub sponsorisée réellement affichée
   const viewed = useRef<Set<string>>(new Set())

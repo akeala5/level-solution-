@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { WalletService } from '../wallet/wallet.service';
+import { PlanConfigService } from '../common/services/plan-config.service';
 import { ForbiddenException } from '@nestjs/common';
 
 // ── Mocks ──────────────────────────────────────────────────────────────────
@@ -43,6 +44,15 @@ const mockWebhooks = {
   dispatch: jest.fn().mockResolvedValue(undefined),
 };
 
+const PLAN_COMMISSION: Record<string, number> = {
+  FREE: 0.05, BASIC: 0.045, ESSENTIAL: 0.04, PREMIUM: 0.035, PRO: 0.03, BUSINESS: 0.02,
+};
+const mockPlanConfig = {
+  getConfig: jest.fn((plan: string) => Promise.resolve({ plan, commission: PLAN_COMMISSION[plan] ?? 0.05, maxProducts: 10 })),
+  getActivePlans: jest.fn().mockResolvedValue([]),
+  invalidate: jest.fn(),
+};
+
 const mockWallet = {
   creditSellerFromOrder: jest.fn().mockResolvedValue(true),
 };
@@ -60,6 +70,7 @@ describe('OrdersService', () => {
         { provide: NotificationsService, useValue: mockNotifications },
         { provide: WebhooksService, useValue: mockWebhooks },
         { provide: WalletService, useValue: mockWallet },
+        { provide: PlanConfigService, useValue: mockPlanConfig },
       ],
     }).compile();
 

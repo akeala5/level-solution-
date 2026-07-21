@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ProductsService } from './products.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SearchService } from '../search/search.service';
+import { PlanConfigService } from '../common/services/plan-config.service';
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 
 const mockPrisma = {
@@ -33,6 +34,12 @@ const mockSearch = {
   bulkIndex: jest.fn().mockResolvedValue(undefined),
 };
 
+const mockPlanConfig = {
+  getConfig: jest.fn((plan: string) => Promise.resolve({ plan, maxProducts: PLAN_LIMITS[plan] ?? 10 })),
+  getActivePlans: jest.fn().mockResolvedValue([]),
+  invalidate: jest.fn(),
+};
+
 const PLAN_LIMITS: Record<string, number> = {
   FREE: 10, BASIC: 30, ESSENTIAL: 60, PREMIUM: 100, PRO: 200, BUSINESS: 999999,
 };
@@ -46,6 +53,7 @@ describe('ProductsService', () => {
         ProductsService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: SearchService, useValue: mockSearch },
+        { provide: PlanConfigService, useValue: mockPlanConfig },
       ],
     }).compile();
 

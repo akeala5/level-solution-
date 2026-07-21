@@ -6,10 +6,10 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Search, ShoppingCart, Bell, Menu, X, User, LogOut,
   ChevronDown, ChevronRight, Laptop, Cpu, Wifi, Package, Tag,
-  Heart, MessageSquare, LayoutDashboard, Settings,
+  Heart, MessageSquare, LayoutDashboard, Settings, CreditCard,
   Shield, Zap, Monitor, HardDrive, Printer, Server,
   Smartphone, Headphones, Camera, Keyboard, Cable,
-  Shirt, ShoppingBag, Sparkles, Bike, Car, Truck,
+  Shirt, ShoppingBag, Sparkles, Megaphone, Bike, Car, Truck,
   Home, Sofa, Utensils, Baby, Dumbbell, BookOpen,
   Wrench, Tractor, Hammer, Music, Gamepad2,
   Leaf, Sun, Stethoscope, GraduationCap, Briefcase,
@@ -396,6 +396,7 @@ export default function Header() {
                                     { icon: Banknote, label: 'Retraits', href: '/admin/payouts' },
                                     { icon: Flag, label: 'Signalements', href: '/admin/reports' },
                                     { icon: Scale, label: 'Litiges', href: '/admin/disputes' },
+                                    ...(user?.role === 'ADMIN' ? [{ icon: CreditCard, label: 'Forfaits', href: '/admin/plans' }, { icon: Sparkles, label: 'Hero', href: '/admin/hero' }, { icon: Megaphone, label: 'Pubs', href: '/admin/sponsored' }] : []),
                                   ]
                                 : []),
                             ].map(({ icon: Icon, label, href }) => (
@@ -500,6 +501,7 @@ export default function Header() {
                           { label: 'Retraits', href: '/admin/payouts' },
                           { label: 'Signalements', href: '/admin/reports' },
                           { label: 'Litiges', href: '/admin/disputes' },
+                          ...(user?.role === 'ADMIN' ? [{ label: 'Forfaits', href: '/admin/plans' }, { label: 'Hero', href: '/admin/hero' }, { label: 'Pubs', href: '/admin/sponsored' }] : []),
                         ]
                       : []),
                   ].map(({ label, href }) => (

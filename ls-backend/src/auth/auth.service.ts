@@ -43,10 +43,9 @@ export class AuthService {
     });
 
     if (existingUser) {
+      // Anti-énumération : message générique, ne révèle pas quel champ (email/tél) existe.
       throw new ConflictException(
-        existingUser.email === dto.email.toLowerCase()
-          ? 'Un compte avec cet email existe déjà'
-          : 'Un compte avec ce numéro existe déjà',
+        'Un compte existe déjà avec cet e-mail ou ce numéro de téléphone.',
       );
     }
 

@@ -9,6 +9,7 @@ import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
+import { EmailVerifiedGuard } from '../common/guards/email-verified.guard';
 
 @ApiTags('Products')
 @Controller('products')
@@ -37,6 +38,7 @@ export class ProductsController {
   }
 
   @ApiBearerAuth()
+  @UseGuards(EmailVerifiedGuard)
   @Post()
   @ApiOperation({ summary: 'Créer une annonce' })
   create(@CurrentUser() user: any, @Body() dto: CreateProductDto) {

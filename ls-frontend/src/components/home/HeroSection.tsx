@@ -3,31 +3,41 @@ import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Shield, Zap, Award, Plus, LayoutGrid, TrendingUp } from 'lucide-react'
-import { useTranslations } from 'next-intl'
+import { useTranslations, useLocale } from 'next-intl'
 import HeroAd from '@/components/home/HeroAd'
+import { useHeroConfig } from '@/hooks/useHeroConfig'
 
 const TRENDING = ['RTX 4080', 'MacBook Pro', 'iPhone recondit.', 'Switch réseau', 'Écran 4K']
-const SLIDE_MS = 7000 // ~7s/slide → cycle ~28s (4 slides). Ajustable ici.
 
 type Slide = { part1: string; highlight: string; part2: string; subtitle: string }
 
 export default function HeroSection() {
   const router = useRouter()
   const t = useTranslations('hero')
+  const locale = useLocale()
+  const { data: cfg } = useHeroConfig()
 
-  // Accroches rotatives (i18n hero.slides) ; repli sur l'accroche unique si absent.
-  const raw = t.raw('slides') as Slide[] | undefined
-  const slides: Slide[] = Array.isArray(raw) && raw.length > 0
-    ? raw
-    : [{ part1: t('title_part1'), highlight: t('title_highlight'), part2: t('title_part2'), subtitle: t('subtitle') }]
+  // Accroches : depuis la config admin (hero_config) en priorité, mappées à la
+  // langue courante ; repli sur l'i18n (hero.slides) puis sur l'accroche unique.
+  const cfgSlides = cfg?.slides ?? []
+  const i18nRaw = t.raw('slides') as Slide[] | undefined
+  const slides: Slide[] = cfgSlides.length > 0
+    ? cfgSlides.map((s) => locale === 'en'
+        ? { part1: s.part1En || s.part1, highlight: s.highlightEn || s.highlight, part2: s.part2En || s.part2, subtitle: s.subtitleEn || s.subtitle }
+        : { part1: s.part1, highlight: s.highlight, part2: s.part2, subtitle: s.subtitle })
+    : (Array.isArray(i18nRaw) && i18nRaw.length > 0
+        ? i18nRaw
+        : [{ part1: t('title_part1'), highlight: t('title_highlight'), part2: t('title_part2'), subtitle: t('subtitle') }])
+
+  const slideMs = cfg?.slideMs ?? 7000
 
   const [si, setSi] = useState(0)
   useEffect(() => {
     if (slides.length <= 1) return
     if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
-    const timer = setInterval(() => setSi((i) => (i + 1) % slides.length), SLIDE_MS)
+    const timer = setInterval(() => setSi((i) => (i + 1) % slides.length), slideMs)
     return () => clearInterval(timer)
-  }, [slides.length])
+  }, [slides.length, slideMs])
 
   const s = slides[Math.min(si, slides.length - 1)]
 
