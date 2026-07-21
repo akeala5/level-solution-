@@ -988,3 +988,15 @@ model OtpToken {
   @@index([userId, type])
   @@map("otp_tokens")
 }
+
+// ─── CONFIG DU HERO (éditable par l'admin — singleton id='default') ──────────
+model HeroConfig {
+  id          String   @id @default("default")
+  slides      Json?
+  housePromos Json?
+  slideMs     Int      @default(7000)
+  rotateMs    Int      @default(6500)
+  updatedAt   DateTime @updatedAt @default(now())
+
+  @@map("hero_config")
+}
