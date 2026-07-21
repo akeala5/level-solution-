@@ -7,6 +7,7 @@ import { OrdersService } from './orders.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
+import { EmailVerifiedGuard } from '../common/guards/email-verified.guard';
 
 @ApiTags('Orders')
 @ApiBearerAuth()
@@ -14,6 +15,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
+  @UseGuards(EmailVerifiedGuard)
   @Post()
   @ApiOperation({ summary: 'Passer une commande' })
   createOrder(
@@ -23,6 +25,7 @@ export class OrdersController {
     return this.ordersService.createOrder(buyerId, data);
   }
 
+  @UseGuards(EmailVerifiedGuard)
   @Post('checkout')
   @ApiOperation({ summary: 'Checkout transactionnel — tout le panier, groupé par vendeur (1 sous-commande/vendeur)' })
   createCheckout(

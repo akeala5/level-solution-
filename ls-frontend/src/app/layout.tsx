@@ -7,6 +7,7 @@ import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
 import Providers from './providers'
 import ServiceWorkerRegistration from '@/components/common/ServiceWorkerRegistration'
+import EmailVerificationBanner from '@/components/common/EmailVerificationBanner'
 import CookieConsent from '@/components/common/CookieConsent'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 import { CompareBar, CompareDrawer } from '@/components/product/CompareDrawer'
@@ -106,6 +107,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <div className="flex flex-col min-h-screen">
               <Header />
               <main id="main-content" className="flex-1 pt-[120px] md:pt-[104px]">
+                <EmailVerificationBanner />
                 <ErrorBoundary>
                   {children}
                 </ErrorBoundary>
