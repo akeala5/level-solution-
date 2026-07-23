@@ -45,12 +45,16 @@ export class SearchAlertsService {
   // ─── ADMIN : Heatmap des requêtes de recherche ───────────────────────────────
 
   async getSearchHeatmap() {
-    const alerts = await this.prisma.searchAlert.findMany({ select: { query: true } });
+    // AUD-007 : agregation cote SQL (groupBy) au lieu de charger toute la table.
+    const grouped = await this.prisma.searchAlert.groupBy({
+      by: ['query'],
+      _count: { query: true },
+    });
 
     const counts: Record<string, number> = {};
-    for (const { query } of alerts) {
-      const key = query.toLowerCase().trim();
-      if (key.length > 1) counts[key] = (counts[key] ?? 0) + 1;
+    for (const g of grouped) {
+      const key = g.query.toLowerCase().trim();
+      if (key.length > 1) counts[key] = (counts[key] ?? 0) + (g._count.query ?? 0);
     }
 
     const heatmap = Object.entries(counts)
@@ -65,13 +69,23 @@ export class SearchAlertsService {
   async processAlerts() {
     const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000); // 24h ago
 
+    const BATCH = 200;
+    let cursor: string | undefined;
+    let processed = 0;
+
+    // AUD-007 : traitement par lots (curseur) au lieu de tout charger en memoire.
+    for (;;) {
     const alerts = await this.prisma.searchAlert.findMany({
       where: {
         isActive: true,
         OR: [{ lastSentAt: null }, { lastSentAt: { lte: cutoff } }],
       },
       select: { id: true, userId: true, query: true, filters: true, lastSentAt: true },
+      orderBy: { id: 'asc' },
+      take: BATCH,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     });
+    if (alerts.length === 0) break;
 
     for (const alert of alerts) {
       const since = alert.lastSentAt ?? cutoff;
@@ -108,7 +122,11 @@ export class SearchAlertsService {
         });
       }
     }
+    processed += alerts.length;
+    cursor = alerts[alerts.length - 1].id;
+    if (alerts.length < BATCH) break;
+    }
 
-    return alerts.length;
+    return processed;
   }
 }
