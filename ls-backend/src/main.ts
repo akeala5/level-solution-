@@ -118,9 +118,13 @@ async function bootstrap() {
         const [type, credentials] = auth.split(' ');
         if (type !== 'Basic') return res.status(401).send('Unauthorized');
         const [user, pass] = Buffer.from(credentials, 'base64').toString().split(':');
-        const validUser = process.env.SWAGGER_USER || 'admin';
-        const validPass = process.env.SWAGGER_PASS || 'ls-docs-2026';
-        if (user !== validUser || pass !== validPass) return res.status(401).send('Unauthorized');
+        // AUD-004 : aucune valeur de repli codee en dur — si les creds ne sont pas
+        // configures, l'acces aux docs est refuse (fail-closed).
+        const validUser = process.env.SWAGGER_USER;
+        const validPass = process.env.SWAGGER_PASS;
+        if (!validUser || !validPass || user !== validUser || pass !== validPass) {
+          return res.status(401).send('Unauthorized');
+        }
         next();
       });
     }
