@@ -10,7 +10,7 @@ import { WebhooksService } from '../webhooks/webhooks.service';
 import { WalletService } from '../wallet/wallet.service';
 import { PlanConfigService } from '../common/services/plan-config.service';
 import { getPaginationParams, paginate } from '../common/utils/pagination.util';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID as uuidv4 } from 'crypto';
 
 @Injectable()
 export class OrdersService {

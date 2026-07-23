@@ -14,7 +14,7 @@ import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { authenticator } from 'otplib';
 import * as QRCode from 'qrcode';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID as uuidv4 } from 'crypto';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto, ForgotPasswordDto, ResetPasswordDto, Enable2FADto } from './dto/login.dto';
 import { NotificationsService } from '../notifications/notifications.service';
