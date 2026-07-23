@@ -25,11 +25,25 @@ export class UploadService {
     this.cdnUrl = configService.get('s3.cdnUrl');
   }
 
+  // AUD-003 : verifie les octets magiques reels (pas seulement le Content-Type
+  // client, usurpable). jpg/png/webp uniquement.
+  private assertImageMagic(buf: Buffer) {
+    if (!buf || buf.length < 12) throw new BadRequestException('Fichier illisible ou vide');
+    const isJpg = buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff;
+    const isPng = buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47;
+    const isWebp = buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP';
+    if (!isJpg && !isPng && !isWebp) {
+      throw new BadRequestException('Contenu non conforme (image jpg/png/webp attendue)');
+    }
+  }
+
   async uploadImage(file: Express.Multer.File, folder = 'products'): Promise<{ url: string; thumbnailUrl: string }> {
     if (!file) throw new BadRequestException('Aucun fichier fourni');
 
     const maxSize = 10 * 1024 * 1024; // 10MB
     if (file.size > maxSize) throw new BadRequestException('Fichier trop volumineux (max 10MB)');
+
+    this.assertImageMagic(file.buffer);
 
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
     if (!allowedTypes.includes(file.mimetype)) {
@@ -94,12 +108,19 @@ export class UploadService {
   }
 
   async getPresignedUrl(folder: string, filename: string) {
-    const ext = filename.split('.').pop()?.toLowerCase() || 'jpg';
-    const key = `${folder}/${uuidv4()}.${ext}`;
+    // AUD-003 : allowlist d'extension + Content-Type force + dossier assaini
+    // (anti-traversee) — l'objet stocke restera une image, pas du HTML executable.
+    const safeFolder = (folder || 'products').replace(/[^a-z0-9_-]/gi, '').slice(0, 32) || 'products';
+    const ext = (filename?.split('.').pop() || '').toLowerCase();
+    const EXT_CT: Record<string, string> = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
+    const contentType = EXT_CT[ext];
+    if (!contentType) throw new BadRequestException('Extension non supportee (jpg, png, webp uniquement)');
+    const key = `${safeFolder}/${uuidv4()}.${ext}`;
 
     const command = new PutObjectCommand({
       Bucket: this.bucket,
       Key: key,
+      ContentType: contentType,
     });
 
     const url = await getSignedUrl(this.s3, command, { expiresIn: 300 });

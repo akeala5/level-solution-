@@ -64,7 +64,7 @@ async function bootstrap() {
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
-      forbidNonWhitelisted: false,
+      forbidNonWhitelisted: true, // AUD-006 : rejette les proprietes hors DTO
       transform: true,
       transformOptions: { enableImplicitConversion: true },
     }),
