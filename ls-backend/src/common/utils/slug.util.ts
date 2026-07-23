@@ -1,5 +1,5 @@
 import slugify from 'slugify';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID as uuidv4 } from 'crypto';
 
 export function generateSlug(text: string, unique = true): string {
   const base = slugify(text, {
