@@ -6,7 +6,7 @@ import { Megaphone, ArrowRight } from 'lucide-react'
 import api from '@/lib/api'
 import { formatPrice } from '@/lib/utils'
 import ProductImage from '@/components/product/ProductImage'
-import { useHeroConfig, heroIcon, type HousePromo } from '@/hooks/useHeroConfig'
+import { useHeroConfig, heroIcon, heroAnimClass, type HousePromo } from '@/hooks/useHeroConfig'
 
 interface Ad {
   id: string
@@ -81,6 +81,7 @@ export default function HeroAd() {
   const { data: cfg } = useHeroConfig()
   const house = (cfg?.housePromos && cfg.housePromos.length > 0) ? cfg.housePromos : FALLBACK_HOUSE
   const rotateMs = cfg?.rotateMs ?? 6500
+  const anim = heroAnimClass(cfg?.slideAnim)
 
   const { data } = useQuery({
     queryKey: ['sponsored-featured', 8],
@@ -123,7 +124,7 @@ export default function HeroAd() {
 
   return (
     <div onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
-      <div key={page} className="flex flex-col gap-3 animate-fade-in">
+      <div key={page} className={`flex flex-col gap-3 ${anim}`}>
         {current.map((c, i) => <AdCard key={c.kind === 'ad' ? c.ad.id : `h-${page}-${i}`} card={c} />)}
       </div>
       {pages.length > 1 && (

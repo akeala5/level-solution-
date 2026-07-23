@@ -11,7 +11,7 @@ import toast from 'react-hot-toast'
 
 interface Slide { part1: string; highlight: string; part2: string; subtitle: string; part1En?: string; highlightEn?: string; part2En?: string; subtitleEn?: string }
 interface Promo { icon: string; title: string; desc: string; cta: string; href: string }
-interface Cfg { slides: Slide[]; housePromos: Promo[]; slideMs: number; rotateMs: number }
+interface Cfg { slides: Slide[]; housePromos: Promo[]; slideMs: number; rotateMs: number; slideAnim: string }
 
 const ICONS = Object.keys(HERO_ICONS)
 const inp = 'w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm text-dark focus:border-primary outline-none'
@@ -25,15 +25,15 @@ export default function AdminHeroPage() {
     if (_hasHydrated && (!isAuthenticated || user?.role !== 'ADMIN')) router.push('/')
   }, [_hasHydrated, isAuthenticated, user, router])
 
-  const { isLoading } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['admin-hero-config'],
-    queryFn: async () => {
-      const d = (await api.get('/hero-config')).data.data as Cfg
-      setCfg(d)
-      return d
-    },
+    queryFn: async () => (await api.get('/hero-config')).data.data as Cfg,
     enabled: _hasHydrated && isAuthenticated,
   })
+  // Sync l'état local editable depuis react-query. Via `data` (et pas un setCfg
+  // dans le queryFn) pour que le cache ET le réseau peuplent toujours cfg : sinon
+  // un retour cache = queryFn non rejoué = cfg null = spinner infini.
+  useEffect(() => { if (data) setCfg(data) }, [data])
 
   const save = useMutation({
     mutationFn: async () => (await api.patch('/hero-config', cfg)).data,
@@ -66,6 +66,14 @@ export default function AdminHeroPage() {
             <label className="text-[11px] text-muted">Pubs : durée/rotation (ms)
               <input type="number" className={cn(inp, 'mt-0.5')} value={cfg.rotateMs} onChange={(e) => setCfg({ ...cfg, rotateMs: Number(e.target.value) || 6500 })} /></label>
           </div>
+          <label className="block mt-3 text-[11px] text-muted">Type de transition (accroche & pubs)
+            <select className={cn(inp, 'mt-0.5')} value={cfg.slideAnim || 'fade'} onChange={(e) => setCfg({ ...cfg, slideAnim: e.target.value })}>
+              <option value="fade">Fondu (défaut)</option>
+              <option value="slide">Glissement</option>
+              <option value="zoom">Zoom léger</option>
+              <option value="none">Aucune (instantané)</option>
+            </select>
+          </label>
         </div>
 
         {/* Slides */}
