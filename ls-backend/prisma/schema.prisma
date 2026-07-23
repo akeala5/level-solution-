@@ -999,6 +999,7 @@ model HeroConfig {
   housePromos Json?
   slideMs     Int      @default(7000)
   rotateMs    Int      @default(6500)
+  slideAnim   String   @default("fade")
   updatedAt   DateTime @updatedAt @default(now())
 
   @@map("hero_config")

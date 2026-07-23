@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Shield, Zap, Award, Plus, LayoutGrid, TrendingUp } from 'lucide-react'
 import { useTranslations, useLocale } from 'next-intl'
 import HeroAd from '@/components/home/HeroAd'
-import { useHeroConfig } from '@/hooks/useHeroConfig'
+import { useHeroConfig, heroAnimClass } from '@/hooks/useHeroConfig'
 
 const TRENDING = ['RTX 4080', 'MacBook Pro', 'iPhone recondit.', 'Switch réseau', 'Écran 4K']
 
@@ -30,6 +30,7 @@ export default function HeroSection() {
         : [{ part1: t('title_part1'), highlight: t('title_highlight'), part2: t('title_part2'), subtitle: t('subtitle') }])
 
   const slideMs = cfg?.slideMs ?? 7000
+  const anim = heroAnimClass(cfg?.slideAnim)
 
   const [si, setSi] = useState(0)
   useEffect(() => {
@@ -58,7 +59,7 @@ export default function HeroSection() {
             </span>
 
             {/* Bloc texte à hauteur figée pour éviter tout saut de mise en page pendant la rotation */}
-            <div key={si} className="animate-fade-in">
+            <div key={si} className={anim}>
               <h1 className="text-3xl lg:text-[34px] font-extrabold leading-[1.1] tracking-tight mb-2.5 text-white min-h-[76px] lg:min-h-[76px]">
                 {s.part1} <span className="text-accent">{s.highlight}</span>{s.part2 ? ` ${s.part2}` : ''}
               </h1>

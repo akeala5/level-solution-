@@ -5,7 +5,11 @@ module.exports = {
     './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',
     './src/app/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/hooks/**/*.{js,ts,jsx,tsx,mdx}',
   ],
+  // Classes de transition du hero choisies au runtime (heroAnimClass) -> safelist
+  // pour garantir leur generation meme si le token n'apparait pas litteralement.
+  safelist: ['animate-fade-in', 'animate-slide-in', 'animate-zoom-in'],
   theme: {
     extend: {
       colors: {
@@ -59,11 +63,21 @@ module.exports = {
       },
       animation: {
         'fade-in': 'fadeIn 0.3s ease-out',
+        'slide-in': 'slideIn 0.4s ease-out',
+        'zoom-in': 'zoomIn 0.35s ease-out',
       },
       keyframes: {
         fadeIn: {
           from: { opacity: '0', transform: 'translateY(8px)' },
           to:   { opacity: '1', transform: 'translateY(0)' },
+        },
+        slideIn: {
+          from: { opacity: '0', transform: 'translateX(26px)' },
+          to:   { opacity: '1', transform: 'translateX(0)' },
+        },
+        zoomIn: {
+          from: { opacity: '0', transform: 'scale(0.96)' },
+          to:   { opacity: '1', transform: 'scale(1)' },
         },
       },
     },

@@ -34,6 +34,7 @@ export class HeroConfigService {
       housePromos: (row?.housePromos as any) ?? DEFAULT_HOUSE,
       slideMs: row?.slideMs ?? 7000,
       rotateMs: row?.rotateMs ?? 6500,
+      slideAnim: row?.slideAnim ?? 'fade',
     };
   }
 
@@ -44,6 +45,7 @@ export class HeroConfigService {
     if (dto.housePromos !== undefined) data.housePromos = dto.housePromos;
     if (dto.slideMs !== undefined) data.slideMs = dto.slideMs;
     if (dto.rotateMs !== undefined) data.rotateMs = dto.rotateMs;
+    if (dto.slideAnim !== undefined) data.slideAnim = dto.slideAnim;
 
     await this.prisma.heroConfig.upsert({
       where: { id: 'default' },

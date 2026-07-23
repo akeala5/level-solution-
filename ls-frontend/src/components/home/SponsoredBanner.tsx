@@ -2,7 +2,7 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { Megaphone, ArrowRight } from 'lucide-react'
-import { useHeroConfig, heroIcon, type HousePromo } from '@/hooks/useHeroConfig'
+import { useHeroConfig, heroIcon, heroAnimClass, type HousePromo } from '@/hooks/useHeroConfig'
 
 const FALLBACK_HOUSE: HousePromo[] = [
   { icon: 'Crown', title: 'Boostez vos ventes', desc: 'Devenez vendeur Premium : boutique pro, badge vérifié et annonces sponsorisées.', cta: 'Voir les forfaits', href: '/pricing' },
@@ -16,6 +16,7 @@ const FALLBACK_HOUSE: HousePromo[] = [
 export default function SponsoredBanner() {
   const { data: cfg } = useHeroConfig()
   const house = (cfg?.housePromos && cfg.housePromos.length > 0) ? cfg.housePromos : FALLBACK_HOUSE
+  const anim = heroAnimClass(cfg?.slideAnim)
 
   // Démarre sur un encart différent du hero (qui affiche les 1ers) pour éviter la redite.
   const [hi, setHi] = useState(0)
@@ -32,7 +33,7 @@ export default function SponsoredBanner() {
 
   return (
     <section className="container-custom mt-10">
-      <Link key={hi} href={h.href} className="relative flex items-center gap-4 bg-card border border-border rounded-2xl p-4 shadow-card hover:shadow-card-hover transition-shadow animate-fade-in">
+      <Link key={hi} href={h.href} className={`relative flex items-center gap-4 bg-card border border-border rounded-2xl p-4 shadow-card hover:shadow-card-hover transition-shadow ${anim}`}>
         <span className="absolute top-2 right-3 text-[10px] font-bold uppercase tracking-wide text-muted flex items-center gap-1">
           <Megaphone size={11} /> Espace pub
         </span>
