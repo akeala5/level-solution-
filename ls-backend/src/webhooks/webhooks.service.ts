@@ -5,6 +5,8 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import * as crypto from 'crypto';
+import { promises as dns } from 'dns';
+import * as net from 'net';
 import { PrismaService } from '../prisma/prisma.service';
 
 const ALLOWED_EVENTS = [
@@ -64,9 +66,7 @@ export class WebhooksService {
   // ─── WEBHOOK ENDPOINTS ────────────────────────────────────────────────────────
 
   async createEndpoint(userId: string, dto: { url: string; events: string[] }) {
-    if (!dto.url.startsWith('https://')) {
-      throw new BadRequestException('L\'URL doit être en HTTPS');
-    }
+    await this.assertSafeWebhookUrl(dto.url);
     const invalid = dto.events.filter((e) => !ALLOWED_EVENTS.includes(e));
     if (invalid.length) {
       throw new BadRequestException(`Événements invalides : ${invalid.join(', ')}`);
@@ -100,9 +100,7 @@ export class WebhooksService {
     if (!ep) throw new NotFoundException('Endpoint introuvable');
     if (ep.userId !== userId) throw new ForbiddenException('Non autorisé');
 
-    if (dto.url && !dto.url.startsWith('https://')) {
-      throw new BadRequestException('L\'URL doit être en HTTPS');
-    }
+    if (dto.url) await this.assertSafeWebhookUrl(dto.url);
     if (dto.events) {
       const invalid = dto.events.filter((e) => !ALLOWED_EVENTS.includes(e));
       if (invalid.length) throw new BadRequestException(`Événements invalides : ${invalid.join(', ')}`);
@@ -169,6 +167,9 @@ export class WebhooksService {
     let success = false;
 
     try {
+      // Anti-SSRF : revalider l'URL a la livraison (le DNS a pu changer) et ne
+      // jamais suivre de redirection vers l'interne.
+      await this.assertSafeWebhookUrl(ep.url);
       const res = await fetch(ep.url, {
         method: 'POST',
         headers: {
@@ -177,6 +178,7 @@ export class WebhooksService {
           'X-LS-Event': event,
         },
         body,
+        redirect: 'manual',
         signal: AbortSignal.timeout(10_000),
       });
       statusCode = res.status;
@@ -204,6 +206,62 @@ export class WebhooksService {
   }
 
   // ─── TEST EVENT ───────────────────────────────────────────────────────────────
+
+  // --- ANTI-SSRF (validation des URL de webhook, AUD-001) ---
+
+  private isDisallowedIp(ip: string): boolean {
+    if (net.isIPv4(ip)) {
+      const p = ip.split('.').map(Number);
+      if (p[0] === 0) return true;                        // 0.0.0.0/8
+      if (p[0] === 10) return true;                       // 10/8 prive
+      if (p[0] === 127) return true;                      // loopback
+      if (p[0] === 169 && p[1] === 254) return true;      // link-local + metadonnees cloud
+      if (p[0] === 172 && p[1] >= 16 && p[1] <= 31) return true; // 172.16/12
+      if (p[0] === 192 && p[1] === 168) return true;      // 192.168/16
+      if (p[0] === 100 && p[1] >= 64 && p[1] <= 127) return true; // CGNAT 100.64/10
+      if (p[0] >= 224) return true;                       // multicast/reserve
+      return false;
+    }
+    if (net.isIPv6(ip)) {
+      const a = ip.toLowerCase();
+      if (a === '::1' || a === '::') return true;          // loopback / unspecified
+      if (a.startsWith('fe80')) return true;              // link-local
+      if (a.startsWith('fc') || a.startsWith('fd')) return true; // ULA fc00::/7
+      const m = a.match(/::ffff:(\d+\.\d+\.\d+\.\d+)/); // IPv4-mapped
+      if (m) return this.isDisallowedIp(m[1]);
+      return false;
+    }
+    return true; // format inconnu -> refus
+  }
+
+  // Rejette toute URL non-HTTPS, non-443, avec identifiants, ou resolvant vers une
+  // IP interne (privee/loopback/link-local/metadonnees).
+  private async assertSafeWebhookUrl(rawUrl: string): Promise<void> {
+    let u: URL;
+    try { u = new URL(rawUrl); } catch { throw new BadRequestException('URL invalide'); }
+    if (u.protocol !== 'https:') throw new BadRequestException('L URL doit etre en HTTPS');
+    if (u.port && u.port !== '443') throw new BadRequestException('Port non autorise (443 uniquement)');
+    if (u.username || u.password) throw new BadRequestException('URL avec identifiants interdite');
+
+    const host = u.hostname.replace(/^\[|\]$/g, '');
+    let ips: string[];
+    if (net.isIP(host)) {
+      ips = [host];
+    } else {
+      if (host.toLowerCase() === 'localhost') throw new BadRequestException('Hote non autorise');
+      try {
+        ips = (await dns.lookup(host, { all: true })).map((r) => r.address);
+      } catch {
+        throw new BadRequestException('Hote introuvable (DNS)');
+      }
+    }
+    if (!ips.length) throw new BadRequestException('Hote introuvable');
+    for (const ip of ips) {
+      if (this.isDisallowedIp(ip)) {
+        throw new BadRequestException('URL pointant vers une adresse interne non autorisee');
+      }
+    }
+  }
 
   async sendTestEvent(endpointId: string, userId: string) {
     const ep = await this.prisma.webhookEndpoint.findUnique({ where: { id: endpointId } });

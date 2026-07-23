@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD, APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storage';
 import { PlanConfigModule } from './common/plan-config.module';
 import { HeroConfigModule } from './hero-config/hero-config.module';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -53,10 +54,18 @@ import { StockReservationJob } from './common/jobs/stock-reservation.job';
 
     ThrottlerModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: (configService: ConfigService) => ([{
-        ttl: configService.get('throttle.ttl') * 1000,
-        limit: configService.get('throttle.limit'),
-      }]),
+      useFactory: (configService: ConfigService) => ({
+        throttlers: [{
+          ttl: configService.get('throttle.ttl') * 1000,
+          limit: configService.get('throttle.limit'),
+        }],
+        // AUD-002 : compteurs partages entre workers PM2 (sinon ~2x la limite).
+        storage: new RedisThrottlerStorage({
+          host: configService.get('redis.host'),
+          port: configService.get('redis.port'),
+          password: configService.get('redis.password') || undefined,
+        }),
+      }),
       inject: [ConfigService],
     }),
 
