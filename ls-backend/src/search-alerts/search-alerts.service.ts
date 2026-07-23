@@ -38,7 +38,8 @@ export class SearchAlertsService {
   }
 
   async delete(userId: string, alertId: string) {
-    await this.prisma.searchAlert.deleteMany({ where: { id: alertId, userId } });
+    const res = await this.prisma.searchAlert.deleteMany({ where: { id: alertId, userId } });
+    if (res.count === 0) throw new NotFoundException('Alerte introuvable');
     return { message: 'Alerte supprimée' };
   }
 
